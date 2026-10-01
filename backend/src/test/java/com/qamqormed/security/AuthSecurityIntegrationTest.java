@@ -1,0 +1,154 @@
+package com.qamqormed.security;
+
+import com.qamqormed.entity.Role;
+import com.qamqormed.entity.User;
+import com.qamqormed.repository.UserRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@SpringBootTest
+@AutoConfigureMockMvc
+@ActiveProfiles("test")
+class AuthSecurityIntegrationTest {
+
+    private static final String PATIENT_PHONE = "+77001234567";
+    private static final Pattern TOKEN_PATTERN = Pattern.compile("\\\"accessToken\\\":\\\"([^\\\"]+)\\\"");
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    @BeforeEach
+    void cleanUsers() {
+        userRepository.deleteAll();
+    }
+
+    @Test
+    void registersPatientAndStoresOnlyBcryptHash() throws Exception {
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "firstName": "Test",
+                                  "lastName": "Patient",
+                                  "phone": "8 700 123 45 67",
+                                  "password": "Password123!",
+                                  "confirmPassword": "Password123!"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.role").value("PATIENT"))
+                .andExpect(jsonPath("$.password").doesNotExist());
+
+        User user = userRepository.findByPhone(PATIENT_PHONE).orElseThrow();
+        org.junit.jupiter.api.Assertions.assertNotEquals("Password123!", user.getPassword());
+        org.junit.jupiter.api.Assertions.assertTrue(passwordEncoder.matches("Password123!", user.getPassword()));
+        org.junit.jupiter.api.Assertions.assertTrue(user.getPassword().startsWith("$2"));
+    }
+
+    @Test
+    void requiresAuthenticationAndEnforcesRole() throws Exception {
+        registerPatient();
+        String patientToken = login(PATIENT_PHONE, "Password123!");
+
+        mockMvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + patientToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.phone").value(PATIENT_PHONE))
+                .andExpect(jsonPath("$.role").value("PATIENT"))
+                .andExpect(jsonPath("$.password").doesNotExist());
+
+        mockMvc.perform(get("/api/patient/test").header("Authorization", "Bearer " + patientToken))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/doctor/test").header("Authorization", "Bearer " + patientToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403));
+
+        createUser("+77001234569", Role.DOCTOR);
+        String doctorToken = login("+77001234569", "Password123!");
+        mockMvc.perform(get("/api/doctor/test").header("Authorization", "Bearer " + doctorToken))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/admin/test").header("Authorization", "Bearer " + doctorToken))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/auth/me"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401));
+    }
+
+    @Test
+    void disabledUserCannotLogin() throws Exception {
+        User disabledUser = new User();
+        disabledUser.setFirstName("Disabled");
+        disabledUser.setLastName("User");
+        disabledUser.setPhone("+77001234568");
+        disabledUser.setPassword(passwordEncoder.encode("Password123!"));
+        disabledUser.setRole(Role.PATIENT);
+        disabledUser.setEnabled(false);
+        userRepository.save(disabledUser);
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"phone":"+77001234568","password":"Password123!"}
+                                """))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Неверный номер телефона или пароль"));
+    }
+
+    private void registerPatient() throws Exception {
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"firstName":"Test","lastName":"Patient","phone":"+77001234567","password":"Password123!","confirmPassword":"Password123!"}
+                                """))
+                .andExpect(status().isCreated());
+    }
+
+    private void createUser(String phone, Role role) {
+        User user = new User();
+        user.setFirstName("Demo");
+        user.setLastName(role.name());
+        user.setPhone(phone);
+        user.setPassword(passwordEncoder.encode("Password123!"));
+        user.setRole(role);
+        user.setEnabled(true);
+        userRepository.save(user);
+    }
+
+    private String login(String phone, String password) throws Exception {
+        String body = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"phone\":\"" + phone + "\",\"password\":\"" + password + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        Matcher matcher = TOKEN_PATTERN.matcher(body);
+        if (!matcher.find()) {
+            throw new AssertionError("Login response did not contain accessToken");
+        }
+        return matcher.group(1);
+    }
+}

@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: qamqormed-backend
+  profiles:
+    default: dev
+  jpa:
+    open-in-view: false
+
+server:
+  error:
+    include-message: never
+    include-stacktrace: never
+
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS}
+  jwt:
+    secret: ${JWT_SECRET}
+    expiration: ${JWT_EXPIRATION:7200000}
