@@ -2,6 +2,7 @@
   "common": {
     "home": "Басты бет",
     "profile": "Профиль",
+    "close": "Жабу",
     "logout": "Шығу",
     "language": "Тіл",
     "loading": "Жүктелуде…",
@@ -20,7 +21,11 @@
     "notSpecified": "Көрсетілмеген",
     "nextStage": "Бұл мүмкіндік келесі кезеңде қолжетімді болады.",
     "comingSoon": "Бөлім дайындалуда",
-    "demo": "Демо режимі"
+    "demo": "Демо режимі",
+    "genderMale": "Ер адам",
+    "genderFemale": "Әйел",
+    "genderOther": "Басқа",
+    "weekday": { "monday": "Дс", "tuesday": "Сс", "wednesday": "Ср", "thursday": "Бс", "friday": "Жм", "saturday": "Сб", "sunday": "Жс" }
   },
   "auth": {
     "login": "Кіру",
@@ -57,8 +62,15 @@
     "myAppointments": "Менің жазбаларым",
     "dependents": "Қамқорлығындағылар",
     "medicalRecord": "Медициналық карта",
+    "diagnoses": "Диагноздар",
+    "prescriptions": "Тағайындаулар",
+    "medications": "Дәрілер",
+    "labResults": "Талдаулар",
+    "certificates": "Анықтамалар",
     "documents": "Құжаттар",
+    "profile": "Профиль",
     "schedule": "Кесте",
+    "today": "Бүгін",
     "patients": "Пациенттер",
     "todayPatients": "Бүгінгі пациенттер",
     "vitals": "Пациент көрсеткіштері",
@@ -100,6 +112,19 @@
       "cardiology": "Кардиология",
       "therapy": "Терапия",
       "pediatrics": "Педиатрия"
+    }
+  },
+  "appointment": {
+    "status": {
+      "booked": "Жазылды",
+      "confirmed": "Расталды",
+      "arrived": "Келді",
+      "preparing": "Дайындалуда",
+      "ready": "Дәрігерге дайын",
+      "inAppointment": "Қабылдауда",
+      "completed": "Аяқталды",
+      "cancelled": "Бас тартылды",
+      "noShow": "Келмеді"
     }
   },
   "placeholder": {
@@ -167,6 +192,7 @@
     "descriptionField": "Сипаттамасы",
     "region": "Өңір",
     "city": "Қала",
+    "clinic": "Клиника",
     "specialty": "Мамандық",
     "experience": "Өтілі (жыл)",
     "office": "Кабинет",
@@ -186,8 +212,15 @@
     "editHint": "Өзгерткенде кіру деректері өзгермейді",
     "count": "{{count}}",
     "searchStaff": "Аты-жөні бойынша іздеу",
-    "doctor": "Дәрігер",
+    "doctor": "Дәрігер", "scheduleTitle": "Дәрігерлер кестесі", "scheduleDescription": "Дәрігердің ортақ кестесін өзгертіңіз. Оны дәрігер, мейірбике және пациент көреді.", "workingIntervals": "Жұмыс аралықтары", "scheduleSingleSource": "Өзгерістер барлық рөлге бірден қолданылады.", "slotDuration": "Слот, мин", "break": "Үзіліс", "addInterval": "Аралық қосу", "exceptions": "Кесте ерекшеліктері", "exceptionDescription": "Демалыс пен ерекше сағаттар бар жазбаларды өшірмейді.", "dayOff": "Демалыс", "vacation": "Демалыс", "unavailable": "Қолжетімсіз", "customHours": "Арнайы уақыт", "exceptionNote": "Түсініктеме", "addException": "Ерекшелік қосу", "scheduleSaved": "Кесте сақталды.", "scheduleLoadError": "Кестені жүктеу мүмкін болмады.", "scheduleSaveError": "Кестені сақтау мүмкін болмады.",
     "previous": "Артқа",
     "next": "Келесі"
+  },
+  "staff": {
+    "doctorRole": "Дәрігердің кәсіби профилі", "nurseRole": "Мейірбикенің кәсіби профилі", "doctorProfileTitle": "Дәрігер профилі", "nurseProfileTitle": "Мейірбике профилі",
+    "doctorProfileDescription": "Жұмыс деректері мен клиникалық команда бір профильде.", "nurseProfileDescription": "Профиль, дәрігер және жұмыс ауысымы бір жерде.",
+    "basicInformation": "Негізгі ақпарат", "workplace": "Жұмыс орны", "education": "Білімі", "about": "Маман туралы", "myNurse": "Менің мейірбикем", "myDoctor": "Менің дәрігерім",
+    "fullName": "Аты-жөні", "specialty": "Мамандық", "cabinet": "Кабинет", "consultationDuration": "Қабылдау ұзақтығы", "qualification": "Біліктілік санаты", "experience": "Өтілі", "region": "Облыс", "city": "Қала", "clinic": "Клиника", "address": "Мекенжай", "position": "Лауазым", "nursePosition": "Медбике", "nurseAtClinic": "Клиника командасы", "avatarUrl": "Аватар сілтемесі", "protectedFields": "Рөл, клиника, мамандық және байланыстарды тек әкімші өзгертеді.", "notProvided": "Ақпарат әлі қосылмаған.", "noNurse": "Мейірбике әлі тағайындалмаған.", "noDoctor": "Дәрігер әлі тағайындалмаған.", "workShift": "Жұмыс ауысымы", "patientsToday": "Бүгінгі пациенттер", "waiting": "Күтуде", "prepared": "Дайындалды", "inAppointment": "Қабылдауда", "completed": "Аяқталды", "totalPatients": "Барлық пациент", "arrived": "Келгендер", "waitingPreparation": "Дайындықты күтуде", "readyForDoctor": "Дәрігерге дайын", "todaySchedule": "Бүгінгі кесте", "todayPatients": "Бүгінгі пациенттер", "openFullSchedule": "Толық кестені ашу", "nextPatient": "Келесі пациент", "noAppointments": "Таңдалған күнге жазба жоқ.", "years": "жыл", "minutes": "мин", "today": "Бүгін", "viewSchedule": "Кестені көру", "profileSaved": "Профиль сақталды.", "retry": "Қайта көру", "loadError": "Профильді жүктеу мүмкін болмады.",
+    "calendarLoading": "Күнтізбе жүктелуде…", "calendarError": "Кестені жүктеу мүмкін болмады.", "noSchedule": "Дәрігер кестесі әлі бапталмаған.", "noScheduleDescription": "Әкімшіден жұмыс уақытын қосуды сұраңыз.", "previousPeriod": "Алдыңғы кезең", "nextPeriod": "Келесі кезең", "day": "Күн", "week": "Апта", "month": "Ай", "time": "Уақыт", "dayOff": "Демалыс", "vacation": "Демалыс/жұмыс жоқ", "break": "Үзіліс", "now": "Қазір", "more": "тағы", "nursePreparedShort": "мейірбике дайындады", "appointmentPreview": "Жазба алдын ала көрінісі", "age": "Жасы", "gender": "Жынысы", "recipientType": "Пациент түрі", "patient": "Пациент", "dependent": "Қамқорлықтағы адам", "nurseAssessment": "Мейірбике дайындығы", "pressure": "Қысым", "temperature": "Температура", "pulse": "Тамыр соғысы", "complaints": "Шағымдар", "notes": "Ескертпелер", "openAppointment": "Қабылдауды ашу", "patientArrived": "Пациент келді", "startPreparation": "Дайындауды бастау", "continuePreparation": "Дайындауды жалғастыру", "readyForDoctor": "Пациент дәрігерге дайын", "unknownStatus": "Жазба күйі"
   }
 }

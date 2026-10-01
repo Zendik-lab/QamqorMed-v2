@@ -21,4 +21,5 @@ public interface DoctorNurseAssignmentRepository extends JpaRepository<DoctorNur
     List<DoctorNurseAssignment> findActiveByNurseIdIn(Collection<Long> nurseIds);
     long countByDoctorId(Long doctorId);
     long countByNurseId(Long nurseId);
+    List<DoctorNurseAssignment> findAllByOrderByAssignedAtDesc();
 }

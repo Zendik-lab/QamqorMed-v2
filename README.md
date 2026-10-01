@@ -374,3 +374,55 @@ cd ..\frontend
 npm install
 npm run build
 ```
+
+## Этап 7: связанная медицинская система
+
+Этап 7 добавляет каноническую медицинскую сущность `PatientProfile` и связывает её с владельцем аккаунта, подопечным, записью, приёмом, врачом и клиникой. Старые поля `User` и legacy-статусы сохранены для чтения уже существующих данных; новые записи используют канонические поля и статусы.
+
+Основные сущности и таблицы:
+
+- `patient_profiles` — ФИО, ИИН, дата рождения, пол, телефон, регион/город/клиника, timestamps;
+- `dependents.patient_profile_id` и `appointments.patient_profile_id` — субъект лечения с ownership-check;
+- `medical_visits.patient_profile_id/doctor_profile_id/clinic_id` — связанный приём;
+- `icd10_codes`, `visit_diagnoses`, `prescriptions`, `medication_prescriptions` — структурированный диагноз и назначения;
+- `lab_results`, `medical_certificates` — модели лабораторных результатов и справок;
+- `appointments` — отменивший пользователь, причина отмены и timestamps переходов;
+- `doctor_nurse_assignments` — ADMIN-управляемая активная пара врач–медсестра.
+
+Для PostgreSQL применяйте миграции после базовых схем в следующем порядке:
+
+```text
+backend/src/main/resources/db/medical_structure_postgresql.sql
+backend/src/main/resources/db/family_patient_model_postgresql.sql
+backend/src/main/resources/db/clinical_workflow_postgresql.sql
+backend/src/main/resources/db/stage7_postgresql.sql
+```
+
+Новый lifecycle записи: `BOOKED → CONFIRMED → ARRIVED → PREPARING → READY → IN_APPOINTMENT → COMPLETED`; из активных состояний разрешены `CANCELLED` и `NO_SHOW`. Переходы проверяются backend-сервисом, а действия врача и медсестры ограничены собственной ролью, клиникой и назначенной парой. Отмена пациента доступна через `DELETE /api/patient/appointments/{id}` или `POST /api/patient/appointments/{id}/cancel` с необязательной причиной; публикуется событие `AppointmentCancelled` для будущего waitlist.
+
+Ключевые API этапа 7:
+
+```text
+GET  /api/patient/profile
+PUT  /api/patient/profile
+GET  /api/patient/appointments
+POST /api/patient/appointments
+POST /api/patient/appointments/{id}/cancel
+GET  /api/icd10?query=...
+POST/GET /api/doctor/appointments/{id}/diagnoses
+POST /api/doctor/appointments/{id}/prescription-orders
+POST /api/doctor/appointments/{id}/medications
+GET  /api/patient/diagnoses?subjectId=...
+GET  /api/patient/prescriptions?subjectId=...
+GET  /api/patient/medications?subjectId=...
+GET  /api/patient/lab-results?subjectId=...
+GET  /api/patient/certificates?subjectId=...
+POST /api/doctor/appointments/{id}/lab-results
+POST /api/doctor/appointments/{id}/certificates
+PATCH /api/nurse/appointments/{id}/status
+GET/POST/DELETE /api/admin/doctor-nurse-pairs[/{doctorId}]
+```
+
+Frontend добавляет patient-разделы `/patient/diagnoses`, `/patient/prescriptions`, `/patient/medications`, выбор «я/подопечный», отображение структурированных медицинских данных и обновлённые workflow-статусы. Все patient/doctor/nurse/admin endpoint'ы защищены `SecurityConfig`; JWT role нельзя изменить через frontend. ИИН в DTO маскируется, пароли и password hash не возвращаются.
+
+В dev автоматически создаются `PatientProfile` для старых demo-пользователей и небольшой ICD-10 каталог. Demo-доступ остаётся прежним: `+77000000001 / Patient123!`, `+77000000002 / Doctor123!`, `+77000000003 / Nurse123!`, `+77000000004 / Admin123!`.

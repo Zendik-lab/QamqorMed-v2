@@ -2,10 +2,11 @@ package com.qamqormed.entity;
 
 public enum AppointmentStatus {
     BOOKED,
-    CHECKED_IN,
-    NURSE_IN_PROGRESS,
-    READY_FOR_DOCTOR,
-    DOCTOR_IN_PROGRESS,
+    CONFIRMED,
+    ARRIVED,
+    PREPARING,
+    READY,
+    IN_APPOINTMENT,
     COMPLETED,
     CANCELLED,
     NO_SHOW,
@@ -15,14 +16,19 @@ public enum AppointmentStatus {
      * database is being migrated. New appointments never use these values.
      */
     @Deprecated SCHEDULED,
-    @Deprecated CONFIRMED,
+    @Deprecated CHECKED_IN,
+    @Deprecated NURSE_IN_PROGRESS,
+    @Deprecated READY_FOR_DOCTOR,
+    @Deprecated DOCTOR_IN_PROGRESS,
     @Deprecated IN_PROGRESS;
 
     public AppointmentStatus canonical() {
         return switch (this) {
             case SCHEDULED -> BOOKED;
-            case CONFIRMED -> CHECKED_IN;
-            case IN_PROGRESS -> DOCTOR_IN_PROGRESS;
+            case CHECKED_IN -> ARRIVED;
+            case NURSE_IN_PROGRESS -> PREPARING;
+            case READY_FOR_DOCTOR -> READY;
+            case DOCTOR_IN_PROGRESS, IN_PROGRESS -> IN_APPOINTMENT;
             default -> this;
         };
     }

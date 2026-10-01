@@ -35,6 +35,11 @@ public class Dependent {
     @JoinColumn(name = "owner_id", nullable = false)
     private User owner;
 
+    /** Canonical medical owner. owner is retained for backwards-compatible rows/API clients. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "patient_profile_id")
+    private PatientProfile patientProfile;
+
     @Column(nullable = false, length = 100)
     private String firstName;
 
@@ -82,6 +87,8 @@ public class Dependent {
     public Long getId() { return id; }
     public User getOwner() { return owner; }
     public void setOwner(User owner) { this.owner = owner; }
+    public PatientProfile getPatientProfile() { return patientProfile; }
+    public void setPatientProfile(PatientProfile patientProfile) { this.patientProfile = patientProfile; }
     public String getFirstName() { return firstName; }
     public void setFirstName(String firstName) { this.firstName = firstName; }
     public String getLastName() { return lastName; }

@@ -14,22 +14,26 @@ import com.qamqormed.repository.AppointmentRepository;
 import com.qamqormed.repository.DoctorProfileRepository;
 import com.qamqormed.repository.UserRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 @Service
 public class AppointmentService {
+    private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Qyzylorda");
     private final AppointmentRepository appointments;
     private final DoctorProfileRepository doctors;
     private final UserRepository users;
     private final PatientService patients;
     private final TimeSlotService timeSlots;
+    private final ApplicationEventPublisher events;
 
     public AppointmentService(AppointmentRepository appointments, DoctorProfileRepository doctors, UserRepository users,
-                               PatientService patients, TimeSlotService timeSlots) {
-        this.appointments = appointments; this.doctors = doctors; this.users = users; this.patients = patients; this.timeSlots = timeSlots;
+                               PatientService patients, TimeSlotService timeSlots, ApplicationEventPublisher events) {
+        this.appointments = appointments; this.doctors = doctors; this.users = users; this.patients = patients; this.timeSlots = timeSlots; this.events = events;
     }
 
     @Transactional(readOnly = true)
@@ -50,21 +54,30 @@ public class AppointmentService {
     @Transactional
     public AppointmentResponse createForPatient(Long userId, AppointmentCreateRequest request) {
         User owner = patients.patient(userId);
-        if (request.appointmentAt().isBefore(LocalDateTime.now())) throw new BadRequestException("Дата приёма уже прошла");
-        DoctorProfile doctor = doctors.findById(request.doctorId())
+        var patientProfile = patients.profileEntity(userId);
+        if (request.appointmentAt().isBefore(LocalDateTime.now(CLINIC_ZONE))) throw new BadRequestException("Дата приёма уже прошла");
+        // Lock the doctor's row while validating and creating the appointment. This closes
+        // the race where two patients confirm the same slot at the same time.
+        DoctorProfile doctor = doctors.findByIdForUpdate(request.doctorId())
                 .filter(profile -> profile.isActive() && profile.getUser().isEnabled() && profile.getSpecialty().isActive()
                         && profile.getClinic().isActive() && profile.getClinic().getCity().isActive()
                         && profile.getClinic().getCity().getRegion().isActive())
                 .orElseThrow(() -> new NotFoundException("Врач не найден"));
         validateBookingFilters(doctor, request);
         Dependent dependent = request.dependentId() == null ? null : patients.dependent(userId, request.dependentId());
-        TimeSlot slot = request.timeSlotId() == null ? null : timeSlots.slotForDoctor(request.timeSlotId(), doctor.getId());
-        if (slot != null && !slot.getStartsAt().equals(request.appointmentAt())) throw new BadRequestException("Время не совпадает со свободным слотом");
+        TimeSlot slot = request.timeSlotId() == null
+                ? timeSlots.slotForDoctorAt(doctor.getId(), request.appointmentAt())
+                : timeSlots.slotForDoctor(request.timeSlotId(), doctor.getId());
+        if (!slot.getStartsAt().equals(request.appointmentAt())) throw new BadRequestException("Время не совпадает со свободным слотом");
         if (appointments.existsByDoctorIdAndAppointmentAtAndStatusNot(doctor.getId(), request.appointmentAt(), AppointmentStatus.CANCELLED)) {
-            throw new BadRequestException("Это время уже занято");
+            throw new BadRequestException("Это время уже занято. Выберите другое.");
         }
         Appointment appointment = new Appointment();
         appointment.setBookedBy(owner);
+        // The care recipient is exactly one of the canonical subjects. The
+        // guardian profile remains available through Dependent.patientProfile
+        // but must not also be stored as the appointment subject.
+        appointment.setPatientProfile(dependent == null ? patientProfile : null);
         appointment.setDependent(dependent);
         appointment.setDoctor(doctor);
         appointment.setTimeSlot(slot);
@@ -84,14 +97,23 @@ public class AppointmentService {
 
     @Transactional
     public void cancelForPatient(Long userId, Long appointmentId) {
+        cancelForPatient(userId, appointmentId, null);
+    }
+
+    @Transactional
+    public void cancelForPatient(Long userId, Long appointmentId, String reason) {
         Appointment appointment = appointments.findByIdAndBookedById(appointmentId, userId)
                 .orElseThrow(() -> new NotFoundException("Запись не найдена"));
         AppointmentStatus current = appointment.getCanonicalStatus();
-        if (current != AppointmentStatus.BOOKED && current != AppointmentStatus.CHECKED_IN) {
+        if (current != AppointmentStatus.BOOKED && current != AppointmentStatus.CONFIRMED && current != AppointmentStatus.ARRIVED) {
             throw new BadRequestException("На этом этапе запись уже нельзя отменить");
         }
         appointment.setStatus(AppointmentStatus.CANCELLED);
+        appointment.setCancelledAt(java.time.Instant.now());
+        appointment.setCancelledBy(appointment.getBookedBy());
+        appointment.setCancellationReason(trimToNull(reason));
         appointments.save(appointment);
+        events.publishEvent(new com.qamqormed.event.AppointmentCancelled(appointment.getId(), appointment.getDoctor().getId(), java.time.Instant.now()));
     }
 
     @Transactional(readOnly = true)

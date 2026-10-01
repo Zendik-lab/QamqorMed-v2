@@ -6,6 +6,10 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/dev_schema_update_postgresql.sql
     properties:
       hibernate:
         jdbc:

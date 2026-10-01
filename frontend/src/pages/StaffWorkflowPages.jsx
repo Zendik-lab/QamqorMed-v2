@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import {
   ApiError,
+  addDoctorDiagnosis,
   addDoctorDocument,
   addDoctorPrescription,
   addDoctorReferral,
   completeDoctorAppointment,
   getDoctorAppointmentDetails,
   getDoctorAppointments,
+  getIcd10Codes,
   getNurseAppointmentDetails,
   getNurseAppointments,
   readyNurseAppointment,
@@ -34,9 +36,18 @@ export default function StaffWorkflowPage({ role }) {
   const [treatment, setTreatment] = useState(emptyTreatment)
   const [referral, setReferral] = useState(emptyReferral)
   const [document, setDocument] = useState(emptyDocument)
+  const [icd10Codes, setIcd10Codes] = useState([])
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    const requestedId = new URLSearchParams(window.location.search).get('appointmentId')
+    if (requestedId && items.length) {
+      const item = items.find((value) => String(value.id) === String(requestedId))
+      if (item) openAppointment(item)
+    }
+  }, [items])
 
   const load = () => {
     const fetcher = role === 'DOCTOR' ? getDoctorAppointments : getNurseAppointments
@@ -50,6 +61,7 @@ export default function StaffWorkflowPage({ role }) {
     try {
       const result = await (role === 'DOCTOR' ? getDoctorAppointmentDetails(item.id) : getNurseAppointmentDetails(item.id))
       setDetails(result)
+      if (role === 'DOCTOR') getIcd10Codes('').then(setIcd10Codes).catch(() => {})
       if (role === 'DOCTOR') setVisit({ ...emptyVisit, ...(result.medicalVisit || {}) })
       else setAssessment({ ...emptyAssessment, ...(result.nurseAssessment || {}) })
     } catch (requestError) { setError(messageFor(requestError)) }
@@ -79,7 +91,7 @@ export default function StaffWorkflowPage({ role }) {
     <div className="page-heading"><div className="eyebrow">Медицинский workflow · {role === 'DOCTOR' ? 'врач' : 'медсестра'}</div><h1>{role === 'DOCTOR' ? 'Сегодняшние приёмы' : 'Пациенты у медсестры'}</h1><p className="form-description">Показываются только записи {role === 'DOCTOR' ? 'вашего профиля врача' : 'закреплённого врача'}. Данные обновляются после каждого действия.</p></div>
     <div className="workflow-filters"><Field label="Дата" type="date" value={filters.date} onChange={updateFilter('date')} /><label className="field-group"><span className="field-label">Статус</span><select value={filters.status} onChange={updateFilter('status')}><option value="">Все статусы</option>{statusOptions.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label><Field label="Поиск по ФИО" value={filters.query} onChange={updateFilter('query')} placeholder="Например, Иванов" /></div>
     {error && <p className="error-message" role="alert">{error}</p>}{notice && <p className="success-message">{notice}</p>}
-    <div className="workflow-layout"><div className="staff-appointments">{items.length ? items.map((item) => <AppointmentCard key={item.id} item={item} selected={selectedId === item.id} onOpen={() => openAppointment(item)} />) : <div className="empty-state"><h2>Записей нет</h2><p>Новые записи появятся здесь после бронирования пациентом.</p></div>}</div>{details && <section className="workflow-detail"><DetailHeader details={details} role={role} /><PatientPanel details={details} />{role === 'NURSE' ? <NursePanel details={details} form={assessment} setForm={setAssessment} readOnly={readOnly} busy={busy} run={run} /> : <DoctorPanel details={details} form={visit} setForm={setVisit} treatment={treatment} setTreatment={setTreatment} referral={referral} setReferral={setReferral} document={document} setDocument={setDocument} readOnly={readOnly} busy={busy} run={run} />}</section>}</div>
+    <div className="workflow-layout"><div className="staff-appointments">{items.length ? items.map((item) => <AppointmentCard key={item.id} item={item} selected={selectedId === item.id} onOpen={() => openAppointment(item)} />) : <div className="empty-state"><h2>Записей нет</h2><p>Новые записи появятся здесь после бронирования пациентом.</p></div>}</div>{details && <section className="workflow-detail"><DetailHeader details={details} role={role} /><PatientPanel details={details} />{role === 'NURSE' ? <NursePanel details={details} form={assessment} setForm={setAssessment} readOnly={readOnly} busy={busy} run={run} /> : <DoctorPanel details={details} form={visit} setForm={setVisit} icd10Codes={icd10Codes} treatment={treatment} setTreatment={setTreatment} referral={referral} setReferral={setReferral} document={document} setDocument={setDocument} readOnly={readOnly} busy={busy} run={run} />}</section>}</div>
   </section>
 }
 
@@ -98,20 +110,21 @@ function PatientPanel({ details }) {
 
 function NursePanel({ details, form, setForm, readOnly, busy, run }) {
   const update = (name) => (event) => setForm((current) => ({ ...current, [name]: event.target.value }))
-  const canStart = ['BOOKED', 'CHECKED_IN'].includes(details.status)
-  const canEdit = details.status === 'NURSE_IN_PROGRESS'
+  const canStart = ['BOOKED', 'CONFIRMED', 'ARRIVED'].includes(details.status)
+  const canEdit = details.status === 'PREPARING'
   return <div className="workflow-stage"><div className="stage-heading"><div><span className="eyebrow">Данные медсестры</span><h3>Предварительный осмотр</h3></div>{canStart && <button className="button" type="button" disabled={busy} onClick={() => run(() => startNurseAssessment(details.id), 'Осмотр начат')}>Начать осмотр</button>}</div><div className="form-grid"><Field label="Температура" type="number" step="0.1" value={form.temperature} onChange={update('temperature')} disabled={!canEdit || readOnly} /><Field label="Систолическое давление" type="number" value={form.bloodPressureSystolic} onChange={update('bloodPressureSystolic')} disabled={!canEdit || readOnly} /><Field label="Диастолическое давление" type="number" value={form.bloodPressureDiastolic} onChange={update('bloodPressureDiastolic')} disabled={!canEdit || readOnly} /><Field label="Пульс" type="number" value={form.pulse} onChange={update('pulse')} disabled={!canEdit || readOnly} /><Field label="Сатурация" type="number" value={form.oxygenSaturation} onChange={update('oxygenSaturation')} disabled={!canEdit || readOnly} /><Field label="Рост, см" type="number" step="0.1" value={form.height} onChange={update('height')} disabled={!canEdit || readOnly} /><Field label="Вес, кг" type="number" step="0.1" value={form.weight} onChange={update('weight')} disabled={!canEdit || readOnly} /></div><TextArea label="Краткие жалобы" value={form.complaintSummary} onChange={update('complaintSummary')} disabled={!canEdit || readOnly} /><TextArea label="Комментарий медсестры" value={form.nurseNotes} onChange={update('nurseNotes')} disabled={!canEdit || readOnly} /><div className="form-actions">{canEdit && <><button className="button button--secondary" type="button" disabled={busy} onClick={() => run(() => updateNurseAssessment(details.id, numericAssessment(form)), 'Показатели сохранены')}>Сохранить</button><button className="button" type="button" disabled={busy} onClick={() => run(async () => { await updateNurseAssessment(details.id, numericAssessment(form)); await readyNurseAppointment(details.id) }, 'Пациент передан врачу')}>Передать врачу</button></>}</div></div>
 }
 
-function DoctorPanel({ details, form, setForm, treatment, setTreatment, referral, setReferral, document, setDocument, readOnly, busy, run }) {
+function DoctorPanel({ details, form, setForm, icd10Codes, treatment, setTreatment, referral, setReferral, document, setDocument, readOnly, busy, run }) {
   const update = (name) => (event) => setForm((current) => ({ ...current, [name]: event.target.value }))
   const updateTreatment = (name) => (event) => setTreatment((current) => ({ ...current, [name]: event.target.value }))
   const updateReferral = (name) => (event) => setReferral((current) => ({ ...current, [name]: event.target.value }))
   const updateDocument = (name) => (event) => setDocument((current) => ({ ...current, [name]: event.target.value }))
-  const canStart = details.status === 'READY_FOR_DOCTOR'
-  const canEdit = details.status === 'DOCTOR_IN_PROGRESS'
+  const canStart = details.status === 'READY'
+  const canEdit = details.status === 'IN_APPOINTMENT'
   const saved = details.medicalVisit
-  return <div className="workflow-stage"><div className="stage-heading"><div><span className="eyebrow">Медицинская карта</span><h3>Приём врача</h3></div>{canStart && <button className="button" type="button" disabled={busy} onClick={() => run(() => startDoctorAppointment(details.id), 'Приём начат')}>Начать приём</button>}</div>{details.nurseAssessment && <div className="assessment-summary"><strong>Данные медсестры</strong><span>Температура: {details.nurseAssessment.temperature || '—'} · Давление: {pressure(details.nurseAssessment)} · Пульс: {details.nurseAssessment.pulse || '—'} · SpO₂: {details.nurseAssessment.oxygenSaturation || '—'}</span><small>Жалобы: {details.nurseAssessment.complaintSummary || '—'} · {details.nurseAssessment.nurseNotes || ''}</small></div>}{saved && !canEdit && <ReadOnlyVisit visit={saved} />}{canEdit && <><div className="form-grid"><TextArea label="Жалобы пациента" value={form.chiefComplaint} onChange={update('chiefComplaint')} /><TextArea label="Анамнез" value={form.anamnesis} onChange={update('anamnesis')} /><Field label="Диагноз" value={form.diagnosis} onChange={update('diagnosis')} required /><Field label="Код МКБ-10" value={form.diagnosisCode} onChange={update('diagnosisCode')} /><Field label="Название диагноза" value={form.diagnosisName} onChange={update('diagnosisName')} /></div><TextArea label="Заметки врача" value={form.doctorNotes} onChange={update('doctorNotes')} /><TextArea label="Рекомендации" value={form.recommendations} onChange={update('recommendations')} /><button className="button button--secondary" type="button" disabled={busy} onClick={() => run(() => updateDoctorVisit(details.id, form), 'Данные приёма сохранены')}>Сохранить приём</button><AddTreatment form={treatment} update={updateTreatment} disabled={busy} onAdd={() => run(async () => { await updateDoctorVisit(details.id, form); await addDoctorPrescription(details.id, treatment); setTreatment({ ...emptyTreatment }) }, 'Назначение добавлено')} /><AddReferral form={referral} update={updateReferral} disabled={busy} onAdd={() => run(async () => { await addDoctorReferral(details.id, referral); setReferral({ ...emptyReferral }) }, 'Направление добавлено')} /><AddDocument form={document} update={updateDocument} disabled={busy} onAdd={() => run(async () => { await addDoctorDocument(details.id, document); setDocument({ ...emptyDocument }) }, 'Документ добавлен')} /><div className="form-actions"><button className="button" type="button" disabled={busy || !form.diagnosis} onClick={() => run(async () => { await updateDoctorVisit(details.id, form); await completeDoctorAppointment(details.id) }, 'Приём завершён')}>Завершить приём</button></div></>}</div>
+  const selectedCode = icd10Codes.find((item) => item.code === form.diagnosisCode)
+   return <div className="workflow-stage"><div className="stage-heading"><div><span className="eyebrow">Медицинская карта</span><h3>Приём врача</h3></div>{canStart && <button className="button" type="button" disabled={busy} onClick={() => run(() => startDoctorAppointment(details.id), 'Приём начат')}>Начать приём</button>}</div>{details.nurseAssessment && <div className="assessment-summary"><strong>Данные медсестры</strong><span>Температура: {details.nurseAssessment.temperature || '—'} · Давление: {pressure(details.nurseAssessment)} · Пульс: {details.nurseAssessment.pulse || '—'} · SpO₂: {details.nurseAssessment.oxygenSaturation || '—'}</span><small>Жалобы: {details.nurseAssessment.complaintSummary || '—'} · {details.nurseAssessment.nurseNotes || ''}</small></div>}{saved && !canEdit && <ReadOnlyVisit visit={saved} />}{canEdit && <><div className="form-grid"><TextArea label="Жалобы пациента" value={form.chiefComplaint} onChange={update('chiefComplaint')} /><TextArea label="Анамнез" value={form.anamnesis} onChange={update('anamnesis')} /><Field label="Диагноз" value={form.diagnosis} onChange={update('diagnosis')} required /><label className="field-group"><span className="field-label">МКБ-10</span><select value={form.diagnosisCode || ''} onChange={(event) => { const code = icd10Codes.find((item) => item.code === event.target.value); setForm((current) => ({ ...current, diagnosisCode: event.target.value, diagnosisName: code?.name || current.diagnosisName })) }}><option value="">Выберите код</option>{icd10Codes.map((item) => <option value={item.code} key={item.id}>{item.code} — {item.name}</option>)}</select></label><Field label="Название диагноза" value={form.diagnosisName} onChange={update('diagnosisName')} /></div><TextArea label="Заметки врача" value={form.doctorNotes} onChange={update('doctorNotes')} /><TextArea label="Рекомендации" value={form.recommendations} onChange={update('recommendations')} /><button className="button button--secondary" type="button" disabled={busy} onClick={() => run(() => updateDoctorVisit(details.id, form), 'Данные приёма сохранены')}>Сохранить приём</button><AddTreatment form={treatment} update={updateTreatment} disabled={busy} onAdd={() => run(async () => { await updateDoctorVisit(details.id, form); await addDoctorPrescription(details.id, treatment); setTreatment({ ...emptyTreatment }) }, 'Назначение добавлено')} /><AddReferral form={referral} update={updateReferral} disabled={busy} onAdd={() => run(async () => { await addDoctorReferral(details.id, referral); setReferral({ ...emptyReferral }) }, 'Направление добавлено')} /><AddDocument form={document} update={updateDocument} disabled={busy} onAdd={() => run(async () => { await addDoctorDocument(details.id, document); setDocument({ ...emptyDocument }) }, 'Документ добавлен')} /><div className="form-actions"><button className="button" type="button" disabled={busy || !form.diagnosis} onClick={() => run(async () => { await updateDoctorVisit(details.id, form); await completeDoctorAppointment(details.id) }, 'Приём завершён')}>Завершить приём</button></div></>}</div>
 }
 
 function ReadOnlyVisit({ visit }) {
@@ -128,5 +141,5 @@ function numericAssessment(form) { return Object.fromEntries(Object.entries(form
 function pressure(value) { return value.bloodPressureSystolic || value.bloodPressureDiastolic ? `${value.bloodPressureSystolic || '—'}/${value.bloodPressureDiastolic || '—'}` : value.bloodPressure || '—' }
 function formatDateTime(value) { return value ? value.replace('T', ' ') : '—' }
 function StatusBadge({ value }) { return <span className={`status status--${String(value || '').toLowerCase()}`}>{statusLabel(value)}</span> }
-function statusLabel(value) { return { BOOKED: 'Записан', CHECKED_IN: 'Зарегистрирован', NURSE_IN_PROGRESS: 'У медсестры', READY_FOR_DOCTOR: 'Ожидает врача', DOCTOR_IN_PROGRESS: 'Приём идёт', COMPLETED: 'Приём завершён', CANCELLED: 'Отменён', NO_SHOW: 'Не явился' }[value] || value || '—' }
-const statusOptions = [['BOOKED', 'Записан'], ['CHECKED_IN', 'Зарегистрирован'], ['NURSE_IN_PROGRESS', 'У медсестры'], ['READY_FOR_DOCTOR', 'Ожидает врача'], ['DOCTOR_IN_PROGRESS', 'Приём идёт'], ['COMPLETED', 'Завершён'], ['CANCELLED', 'Отменён'], ['NO_SHOW', 'Не явился']]
+function statusLabel(value) { return { BOOKED: 'Записан', CONFIRMED: 'Подтверждён', ARRIVED: 'Прибыл', PREPARING: 'Подготовка', READY: 'Готов к приёму', IN_APPOINTMENT: 'На приёме', COMPLETED: 'Завершён', CANCELLED: 'Отменён', NO_SHOW: 'Не явился', NURSE_IN_PROGRESS: 'Подготовка', READY_FOR_DOCTOR: 'Готов к приёму', DOCTOR_IN_PROGRESS: 'На приёме' }[value] || 'Статус записи' }
+const statusOptions = [['BOOKED', 'Записан'], ['CONFIRMED', 'Подтверждён'], ['ARRIVED', 'Прибыл'], ['PREPARING', 'У медсестры'], ['READY', 'Ожидает врача'], ['IN_APPOINTMENT', 'Приём идёт'], ['COMPLETED', 'Завершён'], ['CANCELLED', 'Отменён'], ['NO_SHOW', 'Не явился']]

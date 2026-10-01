@@ -26,6 +26,8 @@ function interpolate(value, variables) {
   return value.replace(/{{(.*?)}}/g, (_, key) => String(variables?.[key.trim()] ?? ''))
 }
 
+const missingLabel = '—'
+
 export function I18nProvider({ children }) {
   const [language, setLanguageState] = useState(initialLanguage)
 
@@ -45,7 +47,7 @@ export function I18nProvider({ children }) {
     changeLanguage,
     t: (key, variables = {}) => {
       const value = readPath(resources[language], key) ?? readPath(resources.ru, key)
-      return typeof value === 'string' ? interpolate(value, variables) : key
+      return typeof value === 'string' ? interpolate(value, variables) : missingLabel
     },
   }), [language])
 

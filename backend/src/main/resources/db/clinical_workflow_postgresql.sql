@@ -3,13 +3,13 @@
 -- ddl-auto=validate. It is intentionally additive and preserves all records.
 
 UPDATE appointments SET status = 'BOOKED' WHERE status = 'SCHEDULED';
-UPDATE appointments SET status = 'CHECKED_IN' WHERE status = 'CONFIRMED';
-UPDATE appointments SET status = 'DOCTOR_IN_PROGRESS' WHERE status = 'IN_PROGRESS';
+UPDATE appointments SET status = 'ARRIVED' WHERE status = 'CHECKED_IN' OR status = 'CONFIRMED';
+UPDATE appointments SET status = 'IN_APPOINTMENT' WHERE status = 'DOCTOR_IN_PROGRESS' OR status = 'IN_PROGRESS';
 ALTER TABLE appointments ALTER COLUMN status SET DEFAULT 'BOOKED';
 ALTER TABLE appointments DROP CONSTRAINT IF EXISTS appointments_status_check;
 ALTER TABLE appointments ADD CONSTRAINT appointments_status_check CHECK (status IN (
-    'BOOKED', 'CHECKED_IN', 'NURSE_IN_PROGRESS', 'READY_FOR_DOCTOR',
-    'DOCTOR_IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'NO_SHOW'
+    'BOOKED', 'CONFIRMED', 'ARRIVED', 'PREPARING', 'READY',
+    'IN_APPOINTMENT', 'COMPLETED', 'CANCELLED', 'NO_SHOW'
 ));
 
 ALTER TABLE nurse_intakes ADD COLUMN IF NOT EXISTS blood_pressure_systolic integer;

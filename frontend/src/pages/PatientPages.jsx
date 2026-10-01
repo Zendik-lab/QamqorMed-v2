@@ -15,6 +15,11 @@ import {
   getPatientLocation,
   getPatientAppointments,
   getPatientMedicalRecords,
+  getPatientDiagnoses,
+  getPatientPrescriptions,
+  getPatientMedications,
+  getPatientLabResults,
+  getPatientCertificates,
   getPatientProfile,
   getPatientSubjectHistory,
   searchClinics,
@@ -45,6 +50,95 @@ function fullName(person) {
 
 function PageMessage({ error }) {
   return error ? <p className="error-message" role="alert">{error}</p> : null
+}
+
+function dateKeyFromDate(date = new Date()) {
+  return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-')
+}
+
+function currentClinicDateTimeKey() {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Qyzylorda', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })
+    .formatToParts(new Date())
+    .reduce((result, item) => ({ ...result, [item.type]: item.value }), {})
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}`
+}
+
+function currentClinicDateKey() {
+  return currentClinicDateTimeKey().slice(0, 10)
+}
+
+function dateFromKey(dateKey) {
+  const [year, month, day] = dateKey.split('-').map(Number)
+  return new Date(year, month - 1, day, 12)
+}
+
+function monthStart(dateKey) {
+  const date = dateKey ? dateFromKey(dateKey) : new Date()
+  return new Date(date.getFullYear(), date.getMonth(), 1, 12)
+}
+
+function formatDateKey(dateKey, options = {}) {
+  if (!dateKey) return ''
+  return new Intl.DateTimeFormat('ru-RU', { timeZone: 'Asia/Qyzylorda', ...options }).format(dateFromKey(dateKey))
+}
+
+function formatDateLong(dateKey) {
+  return formatDateKey(dateKey, { weekday: 'long', day: 'numeric', month: 'long' })
+}
+
+function formatDateWithYear(dateKey) {
+  return formatDateKey(dateKey, { day: 'numeric', month: 'long', year: 'numeric' })
+}
+
+function formatDateShort(dateKey) {
+  return formatDateKey(dateKey, { day: 'numeric', month: 'short' }).replace(/\.$/, '')
+}
+
+function formatWeekday(dateKey) {
+  return formatDateKey(dateKey, { weekday: 'short' }).replace(/\.$/, '')
+}
+
+function formatSlotTime(value) {
+  return String(value || '').slice(11, 16)
+}
+
+function slotDateKey(slot) {
+  return String(slot?.startsAt || '').slice(0, 10)
+}
+
+function slotIsInFuture(slot, nowKey = currentClinicDateTimeKey()) {
+  const dateKey = slotDateKey(slot)
+  if (!dateKey) return false
+  const startsAt = String(slot.startsAt).length >= 19 ? String(slot.startsAt).slice(0, 19) : `${String(slot.startsAt).slice(0, 16)}:00`
+  return startsAt >= nowKey
+}
+
+function groupSlotsByDate(items) {
+  const nowKey = currentClinicDateTimeKey()
+  return items.filter((slot) => slotIsInFuture(slot, nowKey)).reduce((groups, slot) => {
+    const key = slotDateKey(slot)
+    if (!key) return groups
+    groups[key] = [...(groups[key] || []), slot]
+    return groups
+  }, {})
+}
+
+function timeGroupLabel(time) {
+  const hour = Number(String(time).slice(0, 2))
+  if (hour < 12) return 'Утро'
+  if (hour < 18) return 'День'
+  return 'Вечер'
+}
+
+function calendarCells(month) {
+  const firstDay = new Date(month.getFullYear(), month.getMonth(), 1, 12)
+  const offset = (firstDay.getDay() + 6) % 7
+  const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0, 12).getDate()
+  return [...Array(offset).fill(null), ...Array.from({ length: daysInMonth }, (_, index) => new Date(month.getFullYear(), month.getMonth(), index + 1, 12))]
+}
+
+function capitalized(value) {
+  return value ? `${value[0].toUpperCase()}${value.slice(1)}` : value
 }
 
 export function PatientLocationPage() {
@@ -179,7 +273,14 @@ export function PatientBookingPage() {
   const [clinicId, setClinicId] = useState('')
   const [doctorId, setDoctorId] = useState('')
   const [doctorQuery, setDoctorQuery] = useState('')
-  const [timeSlotId, setTimeSlotId] = useState('')
+  const [selectedDate, setSelectedDate] = useState('')
+  const [selectedTime, setSelectedTime] = useState('')
+  const [selectedSlot, setSelectedSlot] = useState(null)
+  const [calendarOpen, setCalendarOpen] = useState(false)
+  const [calendarMonth, setCalendarMonth] = useState(monthStart())
+  const [showAllDates, setShowAllDates] = useState(false)
+  const [scheduleError, setScheduleError] = useState('')
+  const [slotsRequestKey, setSlotsRequestKey] = useState(0)
   const [form, setForm] = useState({ dependentId: selectedDependentId, note: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -228,32 +329,63 @@ export function PatientBookingPage() {
   useEffect(() => {
     if (!doctorId) { setSlots([]); return undefined }
     const controller = new AbortController()
-    setSlotsLoading(true); setTimeSlotId('')
-    getDoctorTimeSlots(doctorId, {}, controller.signal).then(setSlots).catch((requestError) => { if (requestError.name !== 'AbortError') setError(messageFor(requestError)) }).finally(() => setSlotsLoading(false))
+    setSlotsLoading(true); setScheduleError(''); setSelectedDate(''); setSelectedTime(''); setSelectedSlot(null); setCalendarOpen(false); setShowAllDates(false)
+    getDoctorTimeSlots(doctorId, {}, controller.signal)
+      .then((items) => {
+        setSlots(items)
+        const firstDate = Object.keys(groupSlotsByDate(items)).sort()[0]
+        if (firstDate) setCalendarMonth(monthStart(firstDate))
+      })
+      .catch((requestError) => { if (requestError.name !== 'AbortError') setScheduleError(requestError instanceof ApiError ? messageFor(requestError) : 'Не удалось загрузить расписание врача.') })
+      .finally(() => setSlotsLoading(false))
     return () => controller.abort()
-  }, [doctorId])
+  }, [doctorId, slotsRequestKey])
 
   const selectedSubject = form.dependentId ? dependents.find((item) => String(item.id) === String(form.dependentId)) : profile
   const filteredSpecialties = specialties.filter((item) => !specialtyQuery || item.name.toLowerCase().includes(specialtyQuery.toLowerCase()))
-  const selectedSlot = slots.find((item) => String(item.id) === String(timeSlotId))
   const selectedDoctor = doctors.find((item) => String(item.id) === String(doctorId))
-  const resetFromCity = () => { setSpecialtyId(''); setSpecialtyQuery(''); setClinicId(''); setDoctorId(''); setDoctorQuery(''); setTimeSlotId(''); setClinics([]); setDoctors([]); setSlots([]) }
+  const slotsByDate = useMemo(() => groupSlotsByDate(slots), [slots])
+  const availableDates = useMemo(() => Object.keys(slotsByDate).sort(), [slotsByDate])
+  const visibleDates = showAllDates ? availableDates : availableDates.slice(0, 6)
+  const selectedDateSlots = slotsByDate[selectedDate] || []
+  const groupedTimes = selectedDateSlots.reduce((groups, slot) => {
+    const label = timeGroupLabel(formatSlotTime(slot.startsAt))
+    groups[label] = [...(groups[label] || []), slot]
+    return groups
+  }, {})
+  const calendarDateKeys = useMemo(() => new Set(availableDates), [availableDates])
+  const calendarDateCells = useMemo(() => calendarCells(calendarMonth), [calendarMonth])
+  const resetScheduleSelection = () => { setSelectedDate(''); setSelectedTime(''); setSelectedSlot(null); setCalendarOpen(false); setShowAllDates(false) }
+  const resetFromCity = () => { setSpecialtyId(''); setSpecialtyQuery(''); setClinicId(''); setDoctorId(''); setDoctorQuery(''); resetScheduleSelection(); setClinics([]); setDoctors([]); setSlots([]) }
   const changeRegion = (event) => { const value = event.target.value; setRegionId(value); setCityId(''); resetFromCity(); if (value) getLocationCities(value).then(setCities).catch((requestError) => setError(messageFor(requestError))); else setCities([]) }
   const changeCity = (event) => { setCityId(event.target.value); resetFromCity() }
-  const chooseSpecialty = (item) => { setSpecialtyId(String(item.id)); setSpecialtyQuery(item.name); setClinicId(''); setDoctorId(''); setTimeSlotId('') }
-  const changeClinic = (event) => { setClinicId(event.target.value); setDoctorId(''); setTimeSlotId('') }
-  const selectDoctor = (id) => { setDoctorId(String(id)); setTimeSlotId('') }
+  const chooseSpecialty = (item) => { setSpecialtyId(String(item.id)); setSpecialtyQuery(item.name); setClinicId(''); setDoctorId(''); resetScheduleSelection() }
+  const changeClinic = (event) => { setClinicId(event.target.value); setDoctorId(''); resetScheduleSelection() }
+  const selectDoctor = (id) => { setDoctorId(String(id)); resetScheduleSelection() }
+  const selectDate = (dateKey) => {
+    if (!slotsByDate[dateKey]?.length) return
+    setSelectedDate(dateKey); setSelectedTime(''); setSelectedSlot(null); setCalendarOpen(false)
+  }
+  const selectTime = (slot) => { setSelectedTime(formatSlotTime(slot.startsAt)); setSelectedSlot(slot) }
+  const retrySlots = () => { setScheduleError(''); setSlotsRequestKey((value) => value + 1) }
   const updateNote = (event) => setForm((current) => ({ ...current, note: event.target.value }))
   const submit = async (event) => {
     event.preventDefault(); setSaving(true); setError(''); setSuccess(null)
     try {
-      const result = await createPatientAppointment({ doctorId: Number(doctorId), dependentId: form.dependentId ? Number(form.dependentId) : null, appointmentAt: selectedSlot.startsAt, cityId: Number(cityId), specialtyId: Number(specialtyId), clinicId: clinicId ? Number(clinicId) : null, timeSlotId: Number(timeSlotId), note: form.note })
-      setSuccess(result); setTimeSlotId(''); setDoctorId('')
-    } catch (requestError) { setError(messageFor(requestError)) } finally { setSaving(false) }
+      const result = await createPatientAppointment({ doctorId: Number(doctorId), dependentId: form.dependentId ? Number(form.dependentId) : null, appointmentAt: selectedSlot.startsAt, cityId: Number(cityId), specialtyId: Number(specialtyId), clinicId: clinicId ? Number(clinicId) : null, timeSlotId: Number(selectedSlot.id), note: form.note })
+      setSuccess(result); resetScheduleSelection(); setDoctorId('')
+    } catch (requestError) {
+      const requestMessage = messageFor(requestError)
+      setError(requestMessage)
+      if (requestMessage.toLowerCase().includes('занят')) {
+        resetScheduleSelection()
+        setSlotsRequestKey((value) => value + 1)
+      }
+    } finally { setSaving(false) }
   }
 
   if (loading) return <section className="page-shell"><p>Загрузка профиля и городов…</p><PageMessage error={error} /></section>
-  return <section className="page-shell"><div className="page-heading"><div className="eyebrow">Новая запись</div><h1>Записаться к врачу</h1><p className="form-description">Выберите пациента, город и специальность — список врачей появится только после фильтрации.</p></div><PageMessage error={error} />{success && <div className="success-panel"><strong>Запись создана</strong><p>Пациент: {success.subject.fullName}</p><p>{success.appointmentAt?.replace('T', ' ')} · {success.doctor.fullName}</p><button className="button button--secondary" onClick={() => navigate('/patient/my-appointments')}>Открыть мои записи</button></div>}<form className="booking-form" onSubmit={submit}><section className="booking-step"><div className="step-number">1</div><div className="step-content"><h2>Кого записать?</h2><div className="subject-picker"><SubjectChoice selected={!form.dependentId} onClick={() => setForm((current) => ({ ...current, dependentId: '' }))} title="Я" subtitle={profile ? fullName(profile) : 'Ваш профиль'} />{dependents.map((item) => <SubjectChoice key={item.id} selected={String(form.dependentId) === String(item.id)} onClick={() => setForm((current) => ({ ...current, dependentId: String(item.id) }))} title={item.fullName} subtitle={`${item.relationshipLabel}, ${item.age ?? '—'} лет`} />)}</div><p className="selection-note">Вы записываете: <strong>{selectedSubject ? fullName(selectedSubject) : 'выберите профиль'}</strong></p></div></section><section className="booking-step"><div className="step-number">2</div><div className="step-content"><h2>Город</h2><div className="form-grid"><label className="field-group"><span className="field-label">Область</span><select value={regionId} onChange={changeRegion} required><option value="">Выберите область…</option>{regions.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label><label className="field-group"><span className="field-label">Город</span><select value={cityId} onChange={changeCity} disabled={!regionId} required><option value="">Выберите город…</option>{cities.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label></div><p className="muted-text">Основной город профиля можно временно изменить только для этой записи.</p></div></section><section className="booking-step"><div className="step-number">3</div><div className="step-content"><h2>Специальность</h2>{specialtiesLoading ? <p>Загрузка специальностей…</p> : !cityId ? <p className="muted-text">Сначала выберите город.</p> : specialties.length === 0 ? <p className="muted-text">В выбранном городе нет доступных специальностей.</p> : <><label className="field-group"><span className="field-label">Поиск специальности</span><input value={specialtyQuery} onChange={(event) => { setSpecialtyQuery(event.target.value); setSpecialtyId('') }} placeholder="Например, кардиолог" /></label><div className="search-option-list">{filteredSpecialties.slice(0, 8).map((item) => <button type="button" className={`search-option ${String(item.id) === String(specialtyId) ? 'is-selected' : ''}`} key={item.id} onClick={() => chooseSpecialty(item)}>{item.name}</button>)}</div>{specialtyId && <p className="selection-note">Выбрано: <strong>{specialties.find((item) => String(item.id) === String(specialtyId))?.name}</strong></p>}</>}</div></section>{specialtyId && <section className="booking-step"><div className="step-number">4</div><div className="step-content"><h2>Клиника <span className="muted-text">(необязательно)</span></h2>{clinicsLoading ? <p>Загрузка клиник…</p> : <label className="field-group"><span className="field-label">Поликлиника</span><select value={clinicId} onChange={changeClinic}><option value="">Все клиники</option>{clinics.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label>}<label className="field-group"><span className="field-label">Поиск врача по имени</span><input value={doctorQuery} onChange={(event) => setDoctorQuery(event.target.value)} placeholder="Введите фамилию или имя" /></label></div></section>}{specialtyId && <section className="booking-step"><div className="step-number">5</div><div className="step-content"><h2>Доступные врачи</h2>{doctorsLoading ? <p>Ищем подходящих врачей…</p> : doctors.length === 0 ? <div className="empty-state"><h3>В выбранном городе сейчас нет доступных врачей этой специальности.</h3><p>Измените специальность или выберите другой город.</p></div> : <div className="doctor-result-grid">{doctors.map((doctor) => <article className={`doctor-result-card ${String(doctor.id) === String(doctorId) ? 'is-selected' : ''}`} key={doctor.id}><div><h3>{doctor.lastName} {doctor.firstName}</h3><p>{doctor.specialty?.name}</p><p>{doctor.clinic?.name} · {doctor.cityName}</p>{doctor.officeNumber && <small>Кабинет {doctor.officeNumber}</small>}</div><button type="button" className="button button--compact" onClick={() => selectDoctor(doctor.id)}>{String(doctor.id) === String(doctorId) ? 'Выбран' : 'Выбрать'}</button></article>)}</div>}</div></section>}{doctorId && <section className="booking-step"><div className="step-number">6</div><div className="step-content"><h2>Свободное время</h2>{slotsLoading ? <p>Загрузка расписания…</p> : slots.length === 0 ? <p className="muted-text">Свободных слотов пока нет.</p> : <div className="slot-grid">{slots.map((slot) => <button type="button" key={slot.id} className={`slot-button ${String(slot.id) === String(timeSlotId) ? 'is-selected' : ''}`} onClick={() => setTimeSlotId(String(slot.id))}>{slot.startsAt.replace('T', ' ')}</button>)}</div>}<label className="field-group"><span className="field-label">Комментарий</span><input value={form.note} onChange={updateNote} placeholder="Необязательно" /></label><button className="button" disabled={saving || !selectedSubject || !timeSlotId}>{saving ? 'Создаём запись…' : 'Подтвердить запись'}</button></div></section>}</form></section>
+  return <section className="page-shell"><div className="page-heading"><div className="eyebrow">Новая запись</div><h1>Записаться к врачу</h1><p className="form-description">Выберите пациента, город и специальность — список врачей появится только после фильтрации.</p></div><PageMessage error={error} />{success && <div className="success-panel success-panel--booking"><strong>✓ Вы успешно записаны</strong><p>{formatDateWithYear(slotDateKey({ startsAt: success.appointmentAt }))} · {formatSlotTime(success.appointmentAt)}</p><p>Пациент: {success.subject?.fullName}</p><p>Врач: {success.doctor?.fullName}</p><p>Клиника: {success.clinic?.name}</p><div className="form-actions"><button className="button" type="button" onClick={() => navigate('/patient/my-appointments')}>Перейти к моим записям</button><button className="button button--secondary" type="button" onClick={() => setSuccess(null)}>Закрыть</button></div></div>}<form className="booking-form" onSubmit={submit}><section className="booking-step"><div className="step-number">1</div><div className="step-content"><h2>Кого записать?</h2><div className="subject-picker"><SubjectChoice selected={!form.dependentId} onClick={() => setForm((current) => ({ ...current, dependentId: '' }))} title="Я" subtitle={profile ? fullName(profile) : 'Ваш профиль'} />{dependents.map((item) => <SubjectChoice key={item.id} selected={String(form.dependentId) === String(item.id)} onClick={() => setForm((current) => ({ ...current, dependentId: String(item.id) }))} title={item.fullName} subtitle={`${item.relationshipLabel}, ${item.age ?? '—'} лет`} />)}</div><p className="selection-note">Вы записываете: <strong>{selectedSubject ? fullName(selectedSubject) : 'выберите профиль'}</strong></p></div></section><section className="booking-step"><div className="step-number">2</div><div className="step-content"><h2>Город</h2><div className="form-grid"><label className="field-group"><span className="field-label">Область</span><select value={regionId} onChange={changeRegion} required><option value="">Выберите область…</option>{regions.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label><label className="field-group"><span className="field-label">Город</span><select value={cityId} onChange={changeCity} disabled={!regionId} required><option value="">Выберите город…</option>{cities.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label></div><p className="muted-text">Основной город профиля можно временно изменить только для этой записи.</p></div></section><section className="booking-step"><div className="step-number">3</div><div className="step-content"><h2>Специальность</h2>{specialtiesLoading ? <p>Загрузка специальностей…</p> : !cityId ? <p className="muted-text">Сначала выберите город.</p> : specialties.length === 0 ? <p className="muted-text">В выбранном городе нет доступных специальностей.</p> : <><label className="field-group"><span className="field-label">Поиск специальности</span><input value={specialtyQuery} onChange={(event) => { setSpecialtyQuery(event.target.value); setSpecialtyId(''); setClinicId(''); setDoctorId(''); resetScheduleSelection() }} placeholder="Например, кардиолог" /></label><div className="search-option-list">{filteredSpecialties.slice(0, 8).map((item) => <button type="button" className={`search-option ${String(item.id) === String(specialtyId) ? 'is-selected' : ''}`} key={item.id} onClick={() => chooseSpecialty(item)}>{item.name}</button>)}</div>{specialtyId && <p className="selection-note">Выбрано: <strong>{specialties.find((item) => String(item.id) === String(specialtyId))?.name}</strong></p>}</>}</div></section>{specialtyId && <section className="booking-step"><div className="step-number">4</div><div className="step-content"><h2>Клиника <span className="muted-text">(необязательно)</span></h2>{clinicsLoading ? <p>Загрузка клиник…</p> : <label className="field-group"><span className="field-label">Поликлиника</span><select value={clinicId} onChange={changeClinic}><option value="">Все клиники</option>{clinics.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label>}<label className="field-group"><span className="field-label">Поиск врача по имени</span><input value={doctorQuery} onChange={(event) => setDoctorQuery(event.target.value)} placeholder="Введите фамилию или имя" /></label></div></section>}{specialtyId && <section className="booking-step"><div className="step-number">5</div><div className="step-content"><h2>Доступные врачи</h2>{doctorsLoading ? <p>Ищем подходящих врачей…</p> : doctors.length === 0 ? <div className="empty-state"><h3>В выбранном городе сейчас нет доступных врачей этой специальности.</h3><p>Измените специальность или выберите другой город.</p></div> : <div className="doctor-result-grid">{doctors.map((doctor) => <article className={`doctor-result-card ${String(doctor.id) === String(doctorId) ? 'is-selected' : ''}`} key={doctor.id}><div><h3>{doctor.lastName} {doctor.firstName}</h3><p>{doctor.specialty?.name}</p><p>{doctor.clinic?.name} · {doctor.cityName}</p>{doctor.officeNumber && <small>Кабинет {doctor.officeNumber}</small>}</div><button type="button" className="button button--compact" onClick={() => selectDoctor(doctor.id)}>{String(doctor.id) === String(doctorId) ? 'Выбран' : 'Выбрать'}</button></article>)}</div>}</div></section>}{doctorId && <section className="booking-step"><div className="step-number">6</div><div className="step-content"><h2>Свободное время</h2><p className="form-description">Сначала выберите дату, затем доступное время только для этого дня.</p>{slotsLoading ? <div className="schedule-state"><span className="loading-dot" />Загрузка свободного времени…</div> : scheduleError ? <div className="schedule-state schedule-state--error"><p>{scheduleError || 'Не удалось загрузить расписание врача.'}</p><button className="button button--secondary button--compact" type="button" onClick={retrySlots}>Повторить</button></div> : availableDates.length === 0 ? <div className="schedule-state"><p>Свободных дат пока нет.</p><p className="muted-text">Попробуйте выбрать другого врача.</p></div> : <><div className="date-picker-heading"><span className="field-label">Выберите дату</span><button className="date-calendar-toggle" type="button" onClick={() => setCalendarOpen((value) => !value)}>📅 Другие даты</button></div><div className="date-card-grid">{visibleDates.map((dateKey) => <button type="button" className={`date-card ${selectedDate === dateKey ? 'is-selected' : ''}`} key={dateKey} onClick={() => selectDate(dateKey)}><span className="date-card__badge">{dateKey === currentClinicDateKey() ? 'Сегодня' : dateKey === dateKeyFromDate(new Date(dateFromKey(currentClinicDateKey()).getTime() + 86400000)) ? 'Завтра' : capitalized(formatWeekday(dateKey))}</span><strong>{formatDateShort(dateKey)}</strong><small>{slotsByDate[dateKey].length} {slotsByDate[dateKey].length === 1 ? 'место' : slotsByDate[dateKey].length < 5 ? 'места' : 'мест'}</small></button>)}{availableDates.length > 6 && <button className="date-card date-card--more" type="button" onClick={() => { setShowAllDates((value) => !value); setCalendarOpen(false) }}><span>＋</span><strong>{showAllDates ? 'Скрыть даты' : 'Показать ещё'}</strong><small>{showAllDates ? 'Ближайшие даты' : `${availableDates.length - 6} доступно`}</small></button>}</div>{calendarOpen && <div className="date-calendar" aria-label="Календарь доступных дат"><div className="date-calendar__header"><button type="button" className="icon-button" aria-label="Предыдущий месяц" onClick={() => setCalendarMonth((value) => new Date(value.getFullYear(), value.getMonth() - 1, 1, 12))}>‹</button><strong>{capitalized(new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(calendarMonth))}</strong><button type="button" className="icon-button" aria-label="Следующий месяц" onClick={() => setCalendarMonth((value) => new Date(value.getFullYear(), value.getMonth() + 1, 1, 12))}>›</button></div><div className="calendar-weekdays">{['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((day) => <span key={day}>{day}</span>)}</div><div className="calendar-grid">{calendarDateCells.map((date, index) => { const key = date ? dateKeyFromDate(date) : `empty-${index}`; const isAvailable = date && calendarDateKeys.has(key); const isPast = date && key < currentClinicDateKey(); return date ? <button type="button" key={key} className={`calendar-day ${selectedDate === key ? 'is-selected' : ''}`} disabled={!isAvailable || isPast} onClick={() => selectDate(key)}>{date.getDate()}</button> : <span className="calendar-day calendar-day--empty" key={key} /> })}</div></div>} {selectedDate && <div className="selected-date-panel"><div><span className="eyebrow">Дата приёма</span><strong>{capitalized(formatDateLong(selectedDate))}</strong></div><button type="button" className="text-button" onClick={() => { setSelectedDate(''); setSelectedTime(''); setSelectedSlot(null) }}>Изменить дату</button></div>}{selectedDate && <div className="time-selection"><h3>Свободное время</h3>{Object.entries(groupedTimes).map(([group, groupSlots]) => <div className="time-group" key={group}><h4>{group}</h4><div className="slot-grid">{groupSlots.map((slot) => <button type="button" key={slot.id} className={`slot-button ${selectedSlot?.id === slot.id ? 'is-selected' : ''}`} onClick={() => selectTime(slot)}>{selectedSlot?.id === slot.id ? `✓ ${formatSlotTime(slot.startsAt)}` : formatSlotTime(slot.startsAt)}</button>)}</div></div>)}{selectedDateSlots.length === 0 && <div className="schedule-state"><p>На эту дату свободного времени нет.</p><button className="button button--secondary button--compact" type="button" onClick={() => setSelectedDate('')}>Выбрать другую дату</button></div>}</div>}{selectedSlot && <BookingSummary subject={selectedSubject} doctor={selectedDoctor} dateKey={selectedDate} time={selectedTime} specialty={specialties.find((item) => String(item.id) === String(specialtyId))?.name} clinic={selectedDoctor?.clinic?.name} />}</>}<label className="field-group"><span className="field-label">Комментарий</span><input value={form.note} onChange={updateNote} placeholder="Необязательно" /></label><button className="button" disabled={saving || !selectedSubject || !doctorId || !selectedDate || !selectedTime || !selectedSlot}>{saving ? 'Создаём запись…' : 'Подтвердить запись'}</button></div></section>}</form></section>
 }
 
 export function PatientAppointmentsPage() {
@@ -277,11 +409,61 @@ export function PatientMedicalHistoryPage() {
   return <section className="page-shell"><div className="page-heading"><div className="eyebrow">Медицинские данные</div><h1>Медицинская история — {subjectName || '…'}</h1><p className="form-description">Выберите профиль, чтобы открыть только его завершённые приёмы, назначения и направления.</p></div><PageMessage error={error} /><div className="subject-tabs"><button className={selected === 'SELF' ? 'is-active' : ''} onClick={() => setSelected('SELF')}>{fullName(profile) || 'Я'}</button>{dependents.map((item) => <button className={String(selected) === String(item.id) ? 'is-active' : ''} onClick={() => setSelected(String(item.id))} key={item.id}>{item.firstName} · {item.relationshipLabel}</button>)}</div><div className="records-section">{records.length ? records.map((record) => <VisitCard visit={record} key={record.id} />) : <div className="empty-state"><h2>История пока пуста</h2><p>Завершённые приёмы выбранного профиля появятся здесь.</p></div>}</div></section>
 }
 
+/*
+export function PatientClinicalDataPage({ kind = 'diagnoses' }) {
+  const [profile, setProfile] = useState(null)
+  const [dependents, setDependents] = useState([])
+  const [selected, setSelected] = useState('SELF')
+  const [items, setItems] = useState([])
+  const [error, setError] = useState('')
+  const loaders = { diagnoses: getPatientDiagnoses, prescriptions: getPatientPrescriptions, medications: getPatientMedications, labs: getPatientLabResults, certificates: getPatientCertificates }
+  const titles = { diagnoses: 'Диагнозы', prescriptions: 'Назначения', medications: 'Лекарства', labs: 'Анализы', certificates: 'Справки' }
+  const load = loaders[kind] || loaders.diagnoses
+
+  useEffect(() => { Promise.all([getPatientProfile(), getDependents()]).then(([patient, family]) => { setProfile(patient); setDependents(family) }).catch((e) => setError(messageFor(e))) }, [])
+  useEffect(() => { if (!profile) return; load(selected === 'SELF' ? profile.id : selected).then(setItems).catch((e) => setError(messageFor(e))) }, [profile, selected, kind])
+
+  if (!profile) return <section className="page-shell"><p>Загрузка медицинских данных…</p><PageMessage error={error} /></section>
+  return <section className="page-shell"><div className="page-heading"><div className="eyebrow">Медицинский кабинет</div><h1>{titles[kind] || titles.diagnoses}</h1><p className="form-description">Данные отображаются отдельно для каждого медицинского получателя.</p></div><PageMessage error={error} /><div className="subject-tabs"><button className={selected === 'SELF' ? 'is-active' : ''} onClick={() => setSelected('SELF')}>{fullName(profile) || 'Я'}</button>{dependents.map((item) => <button className={String(selected) === String(item.id) ? 'is-active' : ''} onClick={() => setSelected(String(item.id))} key={item.id}>{item.firstName} · {item.relationshipLabel}</button>)}</div>{items.length ? <div className="records-section">{items.map((item) => <article className="record-card" key={item.id}>{kind === 'diagnoses' && <><span className="eyebrow">МКБ-10 · {item.icd10Code?.code}</span><h3>{item.icd10Code?.name}</h3>{item.notes && <p>{item.notes}</p>}</>}{kind === 'prescriptions' && <><span className="eyebrow">Назначение</span><h3>{item.title}</h3>{item.description && <p>{item.description}</p>}{item.instructions && <p><strong>Как принимать:</strong> {item.instructions}</p></>}{kind === 'medications' && <><span className="eyebrow">Лекарство</span><h3>{item.medicationName}</h3><p>{[item.dosage, item.frequency, item.duration].filter(Boolean).join(' · ')}</p>{item.instructions && <p>{item.instructions}</p>}</>}</article>)}</div> : <div className="empty-state"><h2>Пока нет данных</h2><p>После завершения приёма информация появится здесь.</p></div>}</section>
+}
+*/
+
+export function PatientClinicalDataPage({ kind = 'diagnoses' }) {
+  const [profile, setProfile] = useState(null)
+  const [dependents, setDependents] = useState([])
+  const [selected, setSelected] = useState('SELF')
+  const [items, setItems] = useState([])
+  const [error, setError] = useState('')
+  const loaders = { diagnoses: getPatientDiagnoses, prescriptions: getPatientPrescriptions, medications: getPatientMedications }
+  const titles = { diagnoses: 'Диагнозы', prescriptions: 'Назначения', medications: 'Лекарства' }
+
+  useEffect(() => {
+    Promise.all([getPatientProfile(), getDependents()]).then(([patient, family]) => { setProfile(patient); setDependents(family) }).catch((e) => setError(messageFor(e)))
+  }, [])
+  useEffect(() => {
+    if (!profile) return
+    const load = loaders[kind] || loaders.diagnoses
+    load(selected === 'SELF' ? profile.id : selected).then(setItems).catch((e) => setError(messageFor(e)))
+  }, [profile, selected, kind])
+
+  if (!profile) return <section className="page-shell"><p>Загрузка медицинских данных…</p><PageMessage error={error} /></section>
+  return <section className="page-shell"><div className="page-heading"><div className="eyebrow">Медицинский кабинет</div><h1>{titles[kind] || titles.diagnoses}</h1><p className="form-description">Данные отображаются отдельно для каждого медицинского получателя.</p></div><PageMessage error={error} /><div className="subject-tabs"><button className={selected === 'SELF' ? 'is-active' : ''} onClick={() => setSelected('SELF')}>{fullName(profile) || 'Я'}</button>{dependents.map((item) => <button className={String(selected) === String(item.id) ? 'is-active' : ''} onClick={() => setSelected(String(item.id))} key={item.id}>{item.firstName} · {item.relationshipLabel}</button>)}</div>{items.length ? <div className="records-section">{items.map((item) => <ClinicalDataCard key={item.id} item={item} kind={kind} />)}</div> : <div className="empty-state"><h2>Пока нет данных</h2><p>После завершения приёма информация появится здесь.</p></div>}</section>
+}
+
+function ClinicalDataCard({ item, kind }) {
+  if (kind === 'diagnoses') return <article className="record-card"><span className="eyebrow">МКБ-10 · {item.icd10Code?.code}</span><h3>{item.icd10Code?.name}</h3>{item.notes && <p>{item.notes}</p>}</article>
+  if (kind === 'prescriptions') return <article className="record-card"><span className="eyebrow">Назначение</span><h3>{item.title}</h3>{item.description && <p>{item.description}</p>}{item.instructions && <p><strong>Как выполнять:</strong> {item.instructions}</p>}</article>
+  if (kind === 'labs') return <article className="record-card"><span className="eyebrow">Анализ · {item.testDate || 'дата не указана'}</span><h3>{item.testName}</h3><p><strong>Статус:</strong> {item.status}</p>{item.result && <p><strong>Результат:</strong> {item.result}</p>}{item.referenceRange && <p><strong>Норма:</strong> {item.referenceRange}</p>}{item.comment && <p>{item.comment}</p>}</article>
+  if (kind === 'certificates') return <article className="record-card"><span className="eyebrow">Справка · {item.issuedAt?.slice(0, 10)}</span><h3>{item.type}</h3>{item.description && <p>{item.description}</p>}{item.validUntil && <p><strong>Действует до:</strong> {item.validUntil}</p>}</article>
+  return <article className="record-card"><span className="eyebrow">Лекарство</span><h3>{item.medicationName}</h3><p>{[item.dosage, item.frequency, item.duration].filter(Boolean).join(' · ')}</p>{item.instructions && <p>{item.instructions}</p>}</article>
+}
+
 function Field({ label, type = 'text', value, onChange, required = false, ...props }) { return <label className="field-group"><span className="field-label">{label}</span><input type={type} value={value ?? ''} onChange={onChange} required={required} {...props} /></label> }
 function SubjectChoice({ selected, onClick, title, subtitle }) { return <button type="button" className={`subject-choice ${selected ? 'is-selected' : ''}`} onClick={onClick}><span className="subject-choice__radio">{selected ? '✓' : ''}</span><span><strong>{title}</strong><small>{subtitle}</small></span></button> }
+function BookingSummary({ subject, doctor, specialty, clinic, dateKey, time }) { return <div className="booking-summary"><div className="booking-summary__heading"><span className="eyebrow">Ваша запись</span><strong>{formatDateWithYear(dateKey)} · {time}</strong></div><dl><div><dt>Пациент</dt><dd>{subject ? fullName(subject) : '—'}{subject?.relationshipLabel && <small>Ребёнок / подопечный · {subject.relationshipLabel}</small>}</dd></div><div><dt>Клиника</dt><dd>{clinic || '—'}</dd></div><div><dt>Специальность</dt><dd>{specialty || '—'}</dd></div><div><dt>Врач</dt><dd>{doctor ? `${doctor.lastName} ${doctor.firstName}` : '—'}</dd></div></dl></div> }
 function AppointmentRow({ item, detailed = false }) { return <div className="appointment-row"><div><span className="eyebrow">Пациент</span><strong>{item.subject?.fullName}</strong><small>{item.subject?.type === 'DEPENDENT' ? `${item.subject.relationship || 'Подопечный'} · записал ${item.bookedBy?.fullName}` : 'Вы'}</small></div><div><span className="eyebrow">Врач</span><strong>{item.doctor?.fullName}</strong><small>{item.doctor?.specialty} · {item.clinic?.name}</small></div><div><span className="eyebrow">Дата и время</span><strong>{item.appointmentAt?.replace('T', ' ')}</strong>{detailed && <small>{item.clinic?.cityName}</small>}</div></div> }
 function RecordCard({ record }) { return <article className="record-card"><div className="record-card__header"><div><span className="eyebrow">{record.createdAt?.slice(0, 10)} · {record.doctor?.specialty}</span><h3>{record.subject?.fullName}</h3></div><span className="record-doctor">{record.doctor?.fullName}</span></div>{[['Диагноз', record.diagnosis], ['Рекомендации', record.recommendations], ['Назначения', record.prescriptions], ['Направления', record.referrals]].filter(([, value]) => value).map(([label, value]) => <p key={label}><strong>{label}</strong>{value}</p>)}</article> }
 function VisitCard({ visit }) { return <article className="record-card"><div className="record-card__header"><div><span className="eyebrow">{visit.appointmentAt?.replace('T', ' ')} · {visit.doctor?.specialty}</span><h3>{visit.diagnosisName || visit.diagnosis}</h3><small className="muted-text">{visit.clinic?.name} · завершён {visit.completedAt?.replace('T', ' ')}</small></div><span className="record-doctor">{visit.doctor?.fullName}</span></div><p className="muted-text">Приём #{visit.appointmentId}</p>{[['Диагноз', visit.diagnosis], ['Жалобы', visit.chiefComplaint], ['Анамнез', visit.anamnesis], ['Рекомендации', visit.recommendations], ['Заметки врача', visit.doctorNotes]].filter(([, value]) => value).map(([label, value]) => <p key={label}><strong>{label}</strong>{value}</p>)}<ListForVisit title="Назначения" items={visit.treatments} render={(item) => `${item.name}${item.dosage ? ` · ${item.dosage}` : ''}${item.frequency ? ` · ${item.frequency}` : ''}${item.duration ? ` · ${item.duration}` : ''}`} /><ListForVisit title="Направления" items={visit.referrals} render={(item) => `${item.referralType}${item.reason ? ` · ${item.reason}` : ''}`} /><ListForVisit title="Документы" items={visit.documents} render={(item) => item.title} /></article> }
 function ListForVisit({ title, items = [], render }) { return items?.length ? <div className="visit-list"><strong>{title}</strong>{items.map((item) => <span key={item.id}>• {render(item)}</span>)}</div> : null }
-function statusLabel(status) { return { BOOKED: 'Записан', CHECKED_IN: 'Зарегистрирован', NURSE_IN_PROGRESS: 'У медсестры', READY_FOR_DOCTOR: 'Ожидает врача', DOCTOR_IN_PROGRESS: 'Приём идёт', COMPLETED: 'Завершена', CANCELLED: 'Отменена', NO_SHOW: 'Не состоялась', SCHEDULED: 'Запланирована', CONFIRMED: 'Подтверждена', IN_PROGRESS: 'В процессе' }[status] || status }
+function statusLabel(status) { return { BOOKED: 'Записана', CONFIRMED: 'Подтверждена', ARRIVED: 'Пациент прибыл', PREPARING: 'Подготовка', READY: 'Ожидает врача', IN_APPOINTMENT: 'Приём идёт', COMPLETED: 'Завершена', CANCELLED: 'Отменена', NO_SHOW: 'Не состоялась', SCHEDULED: 'Запланирована', CHECKED_IN: 'Пациент прибыл', NURSE_IN_PROGRESS: 'Подготовка', READY_FOR_DOCTOR: 'Ожидает врача', DOCTOR_IN_PROGRESS: 'Приём идёт', IN_PROGRESS: 'В процессе' }[status] || status }
 function emptyDependent() { return { firstName: '', lastName: '', middleName: '', dateOfBirth: '', gender: '', iin: '', relationship: '', phone: '' } }

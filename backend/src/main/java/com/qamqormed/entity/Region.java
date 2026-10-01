@@ -1,14 +1,6 @@
 package com.qamqormed.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
-import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.*;
 
 import java.time.Instant;
 
@@ -26,9 +18,12 @@ public class Region {
     @Column(nullable = false) private boolean active = true;
     @Column(nullable = false, updatable = false) private Instant createdAt;
     @Column(nullable = false) private Instant updatedAt;
+    @OneToMany(mappedBy = "region", fetch = FetchType.LAZY)
+    private java.util.List<PatientProfile> patientProfiles = new java.util.ArrayList<>();
 
     @PrePersist void onCreate() { normalizeNames(); Instant now = Instant.now(); createdAt = now; updatedAt = now; }
     @PreUpdate void onUpdate() { normalizeNames(); updatedAt = Instant.now(); }
+    @PreRemove void detachPatientProfiles() { patientProfiles.forEach(profile -> profile.setRegion(null)); }
     private void normalizeNames() {
         if (nameRu == null || nameRu.isBlank()) nameRu = name;
         if (name == null || name.isBlank()) name = nameRu;

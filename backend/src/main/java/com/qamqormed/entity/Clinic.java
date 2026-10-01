@@ -24,8 +24,11 @@ public class Clinic {
     @Column(nullable = false) private boolean active = true;
     @Column(nullable = false, updatable = false) private Instant createdAt;
     @Column(nullable = false) private Instant updatedAt;
+    @OneToMany(mappedBy = "clinic", fetch = FetchType.LAZY)
+    private java.util.List<PatientProfile> patientProfiles = new java.util.ArrayList<>();
     @PrePersist void onCreate() { normalizeSource(); Instant now = Instant.now(); createdAt = now; updatedAt = now; }
     @PreUpdate void onUpdate() { normalizeSource(); updatedAt = Instant.now(); }
+    @PreRemove void detachPatientProfiles() { patientProfiles.forEach(profile -> profile.setClinic(null)); }
     private void normalizeSource() {
         if (region == null && city != null) region = city.getRegion();
         if (type == null || type.isBlank()) type = "MEDICAL_ORGANIZATION";

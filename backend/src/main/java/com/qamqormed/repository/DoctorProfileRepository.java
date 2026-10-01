@@ -1,11 +1,17 @@
 package com.qamqormed.repository;
+import jakarta.persistence.LockModeType;
 import com.qamqormed.entity.DoctorProfile;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.repository.query.Param;
 import java.util.List;
 import java.util.Optional;
 public interface DoctorProfileRepository extends JpaRepository<DoctorProfile, Long>, JpaSpecificationExecutor<DoctorProfile> {
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select d from DoctorProfile d where d.id = :doctorId")
+    Optional<DoctorProfile> findByIdForUpdate(@Param("doctorId") Long doctorId);
     Optional<DoctorProfile> findByUserId(Long userId);
     Optional<DoctorProfile> findBySeedKey(String seedKey);
     @Query("select distinct d from DoctorProfile d join fetch d.user u join fetch d.specialty s join fetch d.clinic c join fetch c.city city join fetch city.region r order by u.lastName, u.firstName")

@@ -9,6 +9,7 @@ import com.qamqormed.dto.PatientProfileDto;
 import com.qamqormed.dto.PatientProfileUpdateRequest;
 import com.qamqormed.dto.PatientLocationDto;
 import com.qamqormed.dto.PatientLocationUpdateRequest;
+import com.qamqormed.dto.AppointmentCancellationRequest;
 import com.qamqormed.security.AuthenticatedUser;
 import com.qamqormed.service.AppointmentService;
 import com.qamqormed.service.PatientService;
@@ -102,6 +103,13 @@ public class PatientController {
     @DeleteMapping("/appointments/{appointmentId}")
     public ResponseEntity<Void> cancelAppointment(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long appointmentId) {
         appointments.cancelForPatient(principal.getId(), appointmentId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/appointments/{appointmentId}/cancel")
+    public ResponseEntity<Void> cancelAppointment(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long appointmentId,
+                                                   @RequestBody(required = false) AppointmentCancellationRequest request) {
+        appointments.cancelForPatient(principal.getId(), appointmentId, request == null ? null : request.reason());
         return ResponseEntity.noContent().build();
     }
 

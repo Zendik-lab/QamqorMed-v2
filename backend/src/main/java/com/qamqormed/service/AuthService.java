@@ -7,12 +7,14 @@ import com.qamqormed.dto.RegisterRequest;
 import com.qamqormed.dto.UserResponse;
 import com.qamqormed.entity.Role;
 import com.qamqormed.entity.User;
+import com.qamqormed.entity.PatientProfile;
 import com.qamqormed.exception.BadRequestException;
 import com.qamqormed.exception.ConflictException;
 import com.qamqormed.exception.UnauthorizedException;
 import com.qamqormed.repository.UserRepository;
 import com.qamqormed.repository.DoctorProfileRepository;
 import com.qamqormed.repository.NurseProfileRepository;
+import com.qamqormed.repository.PatientProfileRepository;
 import com.qamqormed.security.JwtService;
 import com.qamqormed.util.PhoneNormalizer;
 import org.springframework.stereotype.Service;
@@ -31,14 +33,17 @@ public class AuthService {
     private final JwtService jwtService;
     private final DoctorProfileRepository doctorProfiles;
     private final NurseProfileRepository nurseProfiles;
+    private final PatientProfileRepository patientProfiles;
 
     public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtService jwtService,
-                       DoctorProfileRepository doctorProfiles, NurseProfileRepository nurseProfiles) {
+                       DoctorProfileRepository doctorProfiles, NurseProfileRepository nurseProfiles,
+                       PatientProfileRepository patientProfiles) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.doctorProfiles = doctorProfiles;
         this.nurseProfiles = nurseProfiles;
+        this.patientProfiles = patientProfiles;
     }
 
     @Transactional
@@ -57,7 +62,9 @@ public class AuthService {
         user.setPassword(passwordEncoder.encode(request.password()));
         user.setRole(Role.PATIENT);
         user.setEnabled(true);
-        return response(userRepository.save(user));
+        user = userRepository.save(user);
+        createPatientProfile(user);
+        return response(user);
     }
 
     @Transactional(readOnly = true)
@@ -147,6 +154,16 @@ public class AuthService {
                     .orElseGet(() -> UserResponse.from(user));
         }
         return UserResponse.from(user);
+    }
+
+    private void createPatientProfile(User user) {
+        if (user.getRole() != Role.PATIENT || patientProfiles.findByUserId(user.getId()).isPresent()) return;
+        PatientProfile profile = new PatientProfile();
+        profile.setUser(user); profile.setFirstName(user.getFirstName()); profile.setLastName(user.getLastName());
+        profile.setMiddleName(user.getMiddleName()); profile.setBirthDate(user.getDateOfBirth());
+        profile.setIin(user.getIin()); profile.setPhone(user.getPhone());
+        profile.setRegion(user.getPreferredRegion()); profile.setCity(user.getPreferredCity());
+        patientProfiles.save(profile);
     }
 
     private UserResponse.ClinicSummary clinic(com.qamqormed.entity.Clinic clinic) {

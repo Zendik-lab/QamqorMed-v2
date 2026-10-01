@@ -9,6 +9,8 @@ import com.qamqormed.dto.PatientLocationDto;
 import com.qamqormed.dto.PatientLocationUpdateRequest;
 import com.qamqormed.entity.Dependent;
 import com.qamqormed.entity.City;
+import com.qamqormed.entity.Gender;
+import com.qamqormed.entity.PatientProfile;
 import com.qamqormed.entity.Region;
 import com.qamqormed.entity.User;
 import com.qamqormed.exception.BadRequestException;
@@ -19,6 +21,8 @@ import com.qamqormed.repository.MedicalRecordRepository;
 import com.qamqormed.repository.UserRepository;
 import com.qamqormed.repository.CityRepository;
 import com.qamqormed.repository.RegionRepository;
+import com.qamqormed.repository.PatientProfileRepository;
+import com.qamqormed.repository.ClinicRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,14 +36,17 @@ public class PatientService {
     private final MedicalRecordRepository records;
     private final RegionRepository regions;
     private final CityRepository cities;
+    private final PatientProfileRepository profiles;
+    private final ClinicRepository clinics;
 
     public PatientService(UserRepository users, DependentRepository dependents, MedicalRecordRepository records,
-                          RegionRepository regions, CityRepository cities) {
-        this.users = users; this.dependents = dependents; this.records = records; this.regions = regions; this.cities = cities;
+                          RegionRepository regions, CityRepository cities, PatientProfileRepository profiles,
+                          ClinicRepository clinics) {
+        this.users = users; this.dependents = dependents; this.records = records; this.regions = regions; this.cities = cities; this.profiles = profiles; this.clinics = clinics;
     }
 
     @Transactional(readOnly = true)
-    public PatientProfileDto profile(Long userId) { return PatientProfileDto.from(patient(userId)); }
+    public PatientProfileDto profile(Long userId) { return PatientProfileDto.from(profileEntity(userId)); }
 
     @Transactional(readOnly = true)
     public List<PatientSubjectResponse> subjects(Long userId) {
@@ -57,6 +64,7 @@ public class PatientService {
     @Transactional
     public PatientLocationDto updateLocation(Long userId, PatientLocationUpdateRequest request) {
         User user = patient(userId);
+        PatientProfile profile = profileEntity(userId);
         Region region = regions.findById(request.regionId())
                 .filter(Region::isActive)
                 .orElseThrow(() -> new NotFoundException("Область не найдена"));
@@ -68,22 +76,47 @@ public class PatientService {
         }
         user.setPreferredRegion(region);
         user.setPreferredCity(city);
+        profile.setRegion(region);
+        profile.setCity(city);
+        if (profile.getClinic() != null && !profile.getClinic().getCity().getId().equals(city.getId())) profile.setClinic(null);
         return PatientLocationDto.from(users.save(user));
     }
 
     @Transactional
     public PatientProfileDto updateProfile(Long userId, PatientProfileUpdateRequest request) {
         User user = patient(userId);
-        if (request.firstName() != null) user.setFirstName(requiredText(request.firstName(), "Укажите имя"));
-        if (request.lastName() != null) user.setLastName(requiredText(request.lastName(), "Укажите фамилию"));
-        if (request.middleName() != null) user.setMiddleName(trimToNull(request.middleName()));
+        PatientProfile profile = profileEntity(userId);
+        if (request.firstName() != null) { String value = requiredText(request.firstName(), "Укажите имя"); user.setFirstName(value); profile.setFirstName(value); }
+        if (request.lastName() != null) { String value = requiredText(request.lastName(), "Укажите фамилию"); user.setLastName(value); profile.setLastName(value); }
+        if (request.middleName() != null) { String value = trimToNull(request.middleName()); user.setMiddleName(value); profile.setMiddleName(value); }
         if (request.dateOfBirth() != null) validateDateOfBirth(request.dateOfBirth());
         if (request.iin() != null) validateIin(request.iin());
-        user.setDateOfBirth(request.dateOfBirth() == null ? user.getDateOfBirth() : request.dateOfBirth());
-        if (request.gender() != null) user.setGender(trimToNull(request.gender()));
-        if (request.iin() != null) user.setIin(trimToNull(request.iin()));
+        if (request.dateOfBirth() != null) { user.setDateOfBirth(request.dateOfBirth()); profile.setBirthDate(request.dateOfBirth()); }
+        if (request.gender() != null) {
+            String value = trimToNull(request.gender());
+            user.setGender(value);
+            profile.setGender(parseGender(value));
+        }
+        if (request.iin() != null) {
+            String value = trimToNull(request.iin());
+            if (value != null && profiles.findByIin(value).filter(existing -> !existing.getId().equals(profile.getId())).isPresent()) {
+                throw new ConflictException("Пациент с таким ИИН уже существует");
+            }
+            user.setIin(value);
+            profile.setIin(value);
+        }
         if (request.email() != null) user.setEmail(trimToNull(request.email()));
-        return PatientProfileDto.from(users.save(user));
+        if (request.clinicId() != null) {
+            var clinic = clinics.findById(request.clinicId()).filter(com.qamqormed.entity.Clinic::isActive)
+                    .orElseThrow(() -> new NotFoundException("Клиника не найдена"));
+            if (profile.getCity() != null && !clinic.getCity().getId().equals(profile.getCity().getId())) {
+                throw new BadRequestException("Выбранная клиника не относится к городу профиля");
+            }
+            profile.setClinic(clinic);
+        }
+        if (request.address() != null) profile.setAddress(trimToNull(request.address()));
+        users.save(user);
+        return PatientProfileDto.from(profiles.save(profile));
     }
 
     @Transactional(readOnly = true)
@@ -113,6 +146,7 @@ public class PatientService {
         Dependent dependent = new Dependent();
         apply(dependent, request, iin);
         dependent.setOwner(owner);
+        dependent.setPatientProfile(profileEntity(userId));
         return DependentResponse.from(dependents.save(dependent));
     }
 
@@ -152,8 +186,37 @@ public class PatientService {
     }
 
     public User patient(Long userId) {
-        return users.findById(userId).filter(User::isEnabled)
+        return patientUser(userId);
+    }
+
+    @Transactional
+    public PatientProfile profileEntity(Long userId) {
+        User user = patientUser(userId);
+        return profiles.findByUserId(userId).orElseGet(() -> {
+            PatientProfile profile = new PatientProfile();
+            profile.setUser(user);
+            profile.setFirstName(user.getFirstName());
+            profile.setLastName(user.getLastName());
+            profile.setMiddleName(user.getMiddleName());
+            profile.setBirthDate(user.getDateOfBirth());
+            profile.setGender(parseGender(user.getGender()));
+            profile.setIin(user.getIin());
+            profile.setPhone(user.getPhone());
+            profile.setRegion(user.getPreferredRegion());
+            profile.setCity(user.getPreferredCity());
+            return profiles.save(profile);
+        });
+    }
+
+    private User patientUser(Long userId) {
+        return users.findById(userId).filter(user -> user.isEnabled() && user.getRole() == com.qamqormed.entity.Role.PATIENT)
                 .orElseThrow(() -> new NotFoundException("Пациент не найден"));
+    }
+
+    private Gender parseGender(String value) {
+        if (value == null || value.isBlank()) return null;
+        try { return Gender.valueOf(value.trim().toUpperCase(java.util.Locale.ROOT)); }
+        catch (IllegalArgumentException ex) { throw new BadRequestException("Пол должен быть MALE, FEMALE или UNKNOWN"); }
     }
 
     public static void validateDateOfBirth(LocalDate dateOfBirth) {

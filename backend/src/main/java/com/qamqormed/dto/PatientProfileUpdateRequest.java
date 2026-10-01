@@ -9,6 +9,8 @@ public record PatientProfileUpdateRequest(
         LocalDate dateOfBirth,
         String gender,
         String iin,
-        String email
+        String email,
+        Long clinicId,
+        String address
 ) {
 }

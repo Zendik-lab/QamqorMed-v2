@@ -38,6 +38,11 @@ public class Appointment {
     @JoinColumn(name = "dependent_id")
     private Dependent dependent;
 
+    /** Exactly one of patientProfile/dependent identifies the care recipient. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "patient_profile_id")
+    private PatientProfile patientProfile;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "doctor_profile_id", nullable = false)
     private DoctorProfile doctor;
@@ -55,6 +60,22 @@ public class Appointment {
 
     @Column(length = 1000)
     private String note;
+
+    @Column(name = "cancelled_at")
+    private Instant cancelledAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "cancelled_by_user_id")
+    private User cancelledBy;
+
+    @Column(length = 500)
+    private String cancellationReason;
+
+    private Instant confirmedAt;
+    private Instant arrivedAt;
+    private Instant startedAt;
+    private Instant completedAt;
+    private Instant noShowAt;
 
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
@@ -77,6 +98,8 @@ public class Appointment {
     public void setBookedBy(User bookedBy) { this.bookedBy = bookedBy; }
     public Dependent getDependent() { return dependent; }
     public void setDependent(Dependent dependent) { this.dependent = dependent; }
+    public PatientProfile getPatientProfile() { return patientProfile; }
+    public void setPatientProfile(PatientProfile patientProfile) { this.patientProfile = patientProfile; }
     public DoctorProfile getDoctor() { return doctor; }
     public void setDoctor(DoctorProfile doctor) { this.doctor = doctor; }
     public TimeSlot getTimeSlot() { return timeSlot; }
@@ -88,6 +111,22 @@ public class Appointment {
     public AppointmentStatus getCanonicalStatus() { return status == null ? null : status.canonical(); }
     public String getNote() { return note; }
     public void setNote(String note) { this.note = note; }
+    public Instant getCancelledAt() { return cancelledAt; }
+    public void setCancelledAt(Instant cancelledAt) { this.cancelledAt = cancelledAt; }
+    public User getCancelledBy() { return cancelledBy; }
+    public void setCancelledBy(User cancelledBy) { this.cancelledBy = cancelledBy; }
+    public String getCancellationReason() { return cancellationReason; }
+    public void setCancellationReason(String cancellationReason) { this.cancellationReason = cancellationReason; }
+    public Instant getConfirmedAt() { return confirmedAt; }
+    public void setConfirmedAt(Instant confirmedAt) { this.confirmedAt = confirmedAt; }
+    public Instant getArrivedAt() { return arrivedAt; }
+    public void setArrivedAt(Instant arrivedAt) { this.arrivedAt = arrivedAt; }
+    public Instant getStartedAt() { return startedAt; }
+    public void setStartedAt(Instant startedAt) { this.startedAt = startedAt; }
+    public Instant getCompletedAt() { return completedAt; }
+    public void setCompletedAt(Instant completedAt) { this.completedAt = completedAt; }
+    public Instant getNoShowAt() { return noShowAt; }
+    public void setNoShowAt(Instant noShowAt) { this.noShowAt = noShowAt; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
 }

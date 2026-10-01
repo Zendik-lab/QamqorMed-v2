@@ -68,13 +68,21 @@ public class ClinicalWorkflowService {
     private final SpecialtyRepository specialties;
     private final ClinicRepository clinics;
     private final PatientService patients;
+    private final com.qamqormed.repository.VisitDiagnosisRepository visitDiagnoses;
+    private final com.qamqormed.repository.PrescriptionRepository structuredPrescriptions;
+    private final com.qamqormed.repository.MedicationPrescriptionRepository medicationPrescriptions;
+    private final com.qamqormed.repository.ICD10CodeRepository icd10Codes;
 
     public ClinicalWorkflowService(DoctorProfileRepository doctors, NurseProfileRepository nurses,
                                    DoctorNurseAssignmentRepository assignments, AppointmentRepository appointments,
                                    MedicalRecordRepository records, NurseIntakeRepository intakes,
                                    MedicalVisitRepository visits, TreatmentRepository treatments,
                                    ReferralRepository referrals, MedicalDocumentRepository documents,
-                                   SpecialtyRepository specialties, ClinicRepository clinics, PatientService patients) {
+                                   SpecialtyRepository specialties, ClinicRepository clinics, PatientService patients,
+                                   com.qamqormed.repository.VisitDiagnosisRepository visitDiagnoses,
+                                   com.qamqormed.repository.PrescriptionRepository structuredPrescriptions,
+                                   com.qamqormed.repository.MedicationPrescriptionRepository medicationPrescriptions,
+                                   com.qamqormed.repository.ICD10CodeRepository icd10Codes) {
         this.doctors = doctors;
         this.nurses = nurses;
         this.assignments = assignments;
@@ -88,6 +96,10 @@ public class ClinicalWorkflowService {
         this.specialties = specialties;
         this.clinics = clinics;
         this.patients = patients;
+        this.visitDiagnoses = visitDiagnoses;
+        this.structuredPrescriptions = structuredPrescriptions;
+        this.medicationPrescriptions = medicationPrescriptions;
+        this.icd10Codes = icd10Codes;
     }
 
     @Transactional(readOnly = true)
@@ -122,11 +134,12 @@ public class ClinicalWorkflowService {
     @Transactional
     public AppointmentDetailsResponse startDoctorVisit(Long userId, Long appointmentId) {
         Appointment appointment = doctorAppointmentEntity(userId, appointmentId);
-        requireStatus(appointment, AppointmentStatus.READY_FOR_DOCTOR);
+        requireStatus(appointment, AppointmentStatus.READY);
         MedicalVisit visit = visitFor(appointment, appointment.getDoctor().getUser());
         if (visit.getStartedAt() == null) visit.setStartedAt(LocalDateTime.now());
         visits.save(visit);
-        appointment.setStatus(AppointmentStatus.DOCTOR_IN_PROGRESS);
+        appointment.setStatus(AppointmentStatus.IN_APPOINTMENT);
+        appointment.setStartedAt(java.time.Instant.now());
         appointments.save(appointment);
         return details(appointment);
     }
@@ -134,7 +147,7 @@ public class ClinicalWorkflowService {
     @Transactional
     public MedicalVisitResponse saveMedicalVisit(Long userId, Long appointmentId, MedicalVisitUpsertRequest request) {
         Appointment appointment = doctorAppointmentEntity(userId, appointmentId);
-        requireStatus(appointment, AppointmentStatus.DOCTOR_IN_PROGRESS);
+        requireStatus(appointment, AppointmentStatus.IN_APPOINTMENT);
         MedicalVisit visit = visitFor(appointment, appointment.getDoctor().getUser());
         applyVisit(visit, request);
         return visitResponse(visits.save(visit));
@@ -180,7 +193,10 @@ public class ClinicalWorkflowService {
     public AppointmentResponse updateDoctorStatus(Long userId, Long appointmentId, AppointmentStatusRequest request) {
         Appointment appointment = doctorAppointmentEntity(userId, appointmentId);
         AppointmentStatus target = canonical(request.status());
-        if (target == AppointmentStatus.DOCTOR_IN_PROGRESS) {
+        if (target != AppointmentStatus.IN_APPOINTMENT && target != AppointmentStatus.CANCELLED) {
+            throw new BadRequestException("Врач может начать или отменить только свой приём");
+        }
+        if (target == AppointmentStatus.IN_APPOINTMENT) {
             startDoctorVisit(userId, appointmentId);
         } else {
             transition(appointment, target);
@@ -190,15 +206,30 @@ public class ClinicalWorkflowService {
     }
 
     @Transactional
+    public AppointmentResponse updateNurseStatus(Long userId, Long appointmentId, AppointmentStatusRequest request) {
+        Appointment appointment = nurseAppointmentEntity(userId, appointmentId);
+        AppointmentStatus target = canonical(request.status());
+        if (target != AppointmentStatus.ARRIVED && target != AppointmentStatus.PREPARING && target != AppointmentStatus.READY && target != AppointmentStatus.CANCELLED) {
+            throw new BadRequestException("Медсестра может изменить только этап подготовки пациента");
+        }
+        transition(appointment, target);
+        applyStatusTimestamp(appointment, target);
+        appointments.save(appointment);
+        return AppointmentResponse.from(appointment);
+    }
+
+    @Transactional
     public AppointmentDetailsResponse completeDoctorVisit(Long userId, Long appointmentId) {
         Appointment appointment = doctorAppointmentEntity(userId, appointmentId);
-        requireStatus(appointment, AppointmentStatus.DOCTOR_IN_PROGRESS);
+        requireStatus(appointment, AppointmentStatus.IN_APPOINTMENT);
         MedicalVisit visit = visits.findByAppointmentId(appointmentId)
                 .orElseThrow(() -> new BadRequestException("Сначала начните медицинский приём"));
         if (isBlank(visit.getDiagnosis())) throw new BadRequestException("Перед завершением укажите диагноз");
+        syncStructuredDiagnosis(visit);
         visit.setCompletedAt(LocalDateTime.now());
         visits.save(visit);
         appointment.setStatus(AppointmentStatus.COMPLETED);
+        appointment.setCompletedAt(java.time.Instant.now());
         appointments.save(appointment);
         syncLegacyRecord(visit);
         return details(appointment);
@@ -207,7 +238,7 @@ public class ClinicalWorkflowService {
     @Transactional
     public TreatmentResponse addTreatment(Long userId, Long appointmentId, TreatmentRequest request) {
         Appointment appointment = doctorAppointmentEntity(userId, appointmentId);
-        requireStatus(appointment, AppointmentStatus.DOCTOR_IN_PROGRESS);
+        requireStatus(appointment, AppointmentStatus.IN_APPOINTMENT);
         if (isBlank(request.name())) throw new BadRequestException("Укажите название препарата или назначения");
         MedicalVisit visit = requiredVisit(appointmentId);
         Treatment treatment = new Treatment();
@@ -223,7 +254,7 @@ public class ClinicalWorkflowService {
     @Transactional
     public ReferralResponse addReferral(Long userId, Long appointmentId, ReferralRequest request) {
         Appointment appointment = doctorAppointmentEntity(userId, appointmentId);
-        requireStatus(appointment, AppointmentStatus.DOCTOR_IN_PROGRESS);
+        requireStatus(appointment, AppointmentStatus.IN_APPOINTMENT);
         if (request.referralType() == null) throw new BadRequestException("Укажите тип направления");
         MedicalVisit visit = requiredVisit(appointmentId);
         Referral referral = new Referral();
@@ -242,7 +273,7 @@ public class ClinicalWorkflowService {
     @Transactional
     public MedicalDocumentResponse addDocument(Long userId, Long appointmentId, MedicalDocumentRequest request) {
         Appointment appointment = doctorAppointmentEntity(userId, appointmentId);
-        requireStatus(appointment, AppointmentStatus.DOCTOR_IN_PROGRESS);
+        requireStatus(appointment, AppointmentStatus.IN_APPOINTMENT);
         if (request.type() == null || isBlank(request.title())) throw new BadRequestException("Укажите тип и название документа");
         MedicalVisit visit = requiredVisit(appointmentId);
         MedicalDocument document = new MedicalDocument();
@@ -292,13 +323,14 @@ public class ClinicalWorkflowService {
         Appointment appointment = nurseAppointmentEntity(userId, appointmentId);
         AppointmentStatus current = canonical(appointment.getStatus());
         if (current == AppointmentStatus.BOOKED) {
-            appointment.setStatus(AppointmentStatus.CHECKED_IN);
-            current = AppointmentStatus.CHECKED_IN;
+            appointment.setStatus(AppointmentStatus.ARRIVED);
+            appointment.setArrivedAt(java.time.Instant.now());
+            current = AppointmentStatus.ARRIVED;
         }
-        if (current != AppointmentStatus.CHECKED_IN && current != AppointmentStatus.NURSE_IN_PROGRESS) {
+        if (current != AppointmentStatus.ARRIVED && current != AppointmentStatus.PREPARING) {
             throw statusError("начать предварительный осмотр", appointment);
         }
-        appointment.setStatus(AppointmentStatus.NURSE_IN_PROGRESS);
+        appointment.setStatus(AppointmentStatus.PREPARING);
         appointments.save(appointment);
         return details(appointment);
     }
@@ -307,9 +339,9 @@ public class ClinicalWorkflowService {
     public NurseIntakeResponse saveNurseIntake(Long userId, Long appointmentId, NurseIntakeRequest request) {
         Appointment appointment = nurseAppointmentEntity(userId, appointmentId);
         AppointmentStatus current = canonical(appointment.getStatus());
-        if (current == AppointmentStatus.BOOKED || current == AppointmentStatus.CHECKED_IN) {
-            appointment.setStatus(AppointmentStatus.NURSE_IN_PROGRESS);
-        } else if (current != AppointmentStatus.NURSE_IN_PROGRESS) {
+        if (current == AppointmentStatus.BOOKED || current == AppointmentStatus.ARRIVED) {
+            appointment.setStatus(AppointmentStatus.PREPARING);
+        } else if (current != AppointmentStatus.PREPARING) {
             throw statusError("изменить данные осмотра", appointment);
         }
         DoctorNurseAssignment assignment = activeAssignmentForNurse(userId);
@@ -334,8 +366,8 @@ public class ClinicalWorkflowService {
     @Transactional
     public AppointmentDetailsResponse readyForDoctor(Long userId, Long appointmentId) {
         Appointment appointment = nurseAppointmentEntity(userId, appointmentId);
-        requireStatus(appointment, AppointmentStatus.NURSE_IN_PROGRESS);
-        appointment.setStatus(AppointmentStatus.READY_FOR_DOCTOR);
+        requireStatus(appointment, AppointmentStatus.PREPARING);
+        appointment.setStatus(AppointmentStatus.READY);
         appointments.save(appointment);
         return details(appointment);
     }
@@ -373,7 +405,10 @@ public class ClinicalWorkflowService {
         return MedicalVisitResponse.from(visit,
                 treatments.findAllByMedicalVisitIdOrderByCreatedAtAsc(visit.getId()).stream().map(TreatmentResponse::from).toList(),
                 referrals.findAllByMedicalVisitIdOrderByCreatedAtAsc(visit.getId()).stream().map(ReferralResponse::from).toList(),
-                documents.findAllByMedicalVisitIdOrderByCreatedAtAsc(visit.getId()).stream().map(MedicalDocumentResponse::from).toList());
+                documents.findAllByMedicalVisitIdOrderByCreatedAtAsc(visit.getId()).stream().map(MedicalDocumentResponse::from).toList(),
+                visitDiagnoses.findAllByMedicalVisitIdOrderByPrimaryDiagnosisDescCreatedAtAsc(visit.getId()).stream().map(com.qamqormed.dto.VisitDiagnosisResponse::from).toList(),
+                structuredPrescriptions.findAllByMedicalVisitIdOrderByCreatedAtAsc(visit.getId()).stream().map(com.qamqormed.dto.PrescriptionResponse::from).toList(),
+                medicationPrescriptions.findAllByMedicalVisitIdOrderByCreatedAtAsc(visit.getId()).stream().map(com.qamqormed.dto.MedicationPrescriptionResponse::from).toList());
     }
 
     private MedicalVisit visitFor(Appointment appointment, User doctorUser) {
@@ -382,6 +417,9 @@ public class ClinicalWorkflowService {
             visit.setAppointment(appointment);
             visit.setPatientUser(appointment.getBookedBy());
             visit.setDependent(appointment.getDependent());
+            visit.setPatientProfile(appointment.getPatientProfile());
+            visit.setDoctorProfile(appointment.getDoctor());
+            visit.setClinic(appointment.getDoctor().getClinic());
             visit.setDoctorUser(doctorUser);
             return visit;
         });
@@ -390,6 +428,21 @@ public class ClinicalWorkflowService {
     private MedicalVisit requiredVisit(Long appointmentId) {
         return visits.findByAppointmentId(appointmentId)
                 .orElseThrow(() -> new BadRequestException("Сначала начните медицинский приём"));
+    }
+
+    private void syncStructuredDiagnosis(MedicalVisit visit) {
+        if (isBlank(visit.getDiagnosisCode())) return;
+        boolean alreadySaved = visitDiagnoses.findAllByMedicalVisitIdOrderByPrimaryDiagnosisDescCreatedAtAsc(visit.getId()).stream()
+                .anyMatch(item -> item.getIcd10Code().getCode().equalsIgnoreCase(visit.getDiagnosisCode()));
+        if (alreadySaved) return;
+        icd10Codes.findByCodeIgnoreCase(visit.getDiagnosisCode()).ifPresent(code -> {
+            com.qamqormed.entity.VisitDiagnosis diagnosis = new com.qamqormed.entity.VisitDiagnosis();
+            diagnosis.setMedicalVisit(visit);
+            diagnosis.setIcd10Code(code);
+            diagnosis.setNotes(visit.getDiagnosis());
+            diagnosis.setPrimaryDiagnosis(true);
+            visitDiagnoses.save(diagnosis);
+        });
     }
 
     private void applyVisit(MedicalVisit visit, MedicalVisitUpsertRequest request) {
@@ -460,21 +513,35 @@ public class ClinicalWorkflowService {
         AppointmentStatus current = canonical(appointment.getStatus());
         if (current == target) return;
         boolean allowed = switch (current) {
-            case BOOKED -> target == AppointmentStatus.CHECKED_IN || target == AppointmentStatus.CANCELLED || target == AppointmentStatus.NO_SHOW;
-            case CHECKED_IN -> target == AppointmentStatus.NURSE_IN_PROGRESS || target == AppointmentStatus.CANCELLED || target == AppointmentStatus.NO_SHOW;
-            case NURSE_IN_PROGRESS -> target == AppointmentStatus.READY_FOR_DOCTOR || target == AppointmentStatus.CANCELLED || target == AppointmentStatus.NO_SHOW;
-            case READY_FOR_DOCTOR -> target == AppointmentStatus.DOCTOR_IN_PROGRESS || target == AppointmentStatus.CANCELLED || target == AppointmentStatus.NO_SHOW;
-            case DOCTOR_IN_PROGRESS -> target == AppointmentStatus.COMPLETED || target == AppointmentStatus.CANCELLED;
+            case BOOKED -> target == AppointmentStatus.CONFIRMED || target == AppointmentStatus.ARRIVED || target == AppointmentStatus.CANCELLED || target == AppointmentStatus.NO_SHOW;
+            case CONFIRMED -> target == AppointmentStatus.ARRIVED || target == AppointmentStatus.CANCELLED || target == AppointmentStatus.NO_SHOW;
+            case ARRIVED -> target == AppointmentStatus.PREPARING || target == AppointmentStatus.CANCELLED || target == AppointmentStatus.NO_SHOW;
+            case PREPARING -> target == AppointmentStatus.READY || target == AppointmentStatus.CANCELLED || target == AppointmentStatus.NO_SHOW;
+            case READY -> target == AppointmentStatus.IN_APPOINTMENT || target == AppointmentStatus.CANCELLED || target == AppointmentStatus.NO_SHOW;
+            case IN_APPOINTMENT -> target == AppointmentStatus.COMPLETED || target == AppointmentStatus.CANCELLED;
             case COMPLETED, CANCELLED, NO_SHOW -> false;
             default -> false;
         };
         if (!allowed) throw statusError("изменить статус", appointment);
         appointment.setStatus(target);
+        applyStatusTimestamp(appointment, target);
+    }
+
+    private void applyStatusTimestamp(Appointment appointment, AppointmentStatus target) {
+        java.time.Instant now = java.time.Instant.now();
+        switch (target) {
+            case CONFIRMED -> appointment.setConfirmedAt(now);
+            case ARRIVED -> appointment.setArrivedAt(now);
+            case IN_APPOINTMENT -> appointment.setStartedAt(now);
+            case COMPLETED -> appointment.setCompletedAt(now);
+            case NO_SHOW -> appointment.setNoShowAt(now);
+            default -> { }
+        }
     }
 
     private void requireStatus(Appointment appointment, AppointmentStatus expected) {
         if (canonical(appointment.getStatus()) != expected) {
-            String action = expected == AppointmentStatus.DOCTOR_IN_PROGRESS ? "начать медицинский приём" : "выполнить операцию";
+            String action = expected == AppointmentStatus.IN_APPOINTMENT ? "начать медицинский приём" : "выполнить операцию";
             throw statusError(action, appointment);
         }
     }

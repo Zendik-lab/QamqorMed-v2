@@ -47,5 +47,8 @@ public class AdminMedicalController {
     }
     @PostMapping("/nurses") public ResponseEntity<NurseResponse> createNurse(@Valid @RequestBody CreateNurseProfileRequest r) { return created(staff.createNurse(r)); }
     @PutMapping("/nurses/{id}") public NurseResponse updateNurse(@PathVariable Long id, @Valid @RequestBody UpdateNurseProfileRequest r) { return staff.updateNurse(id, r); }
+    @GetMapping("/doctor-nurse-pairs") public List<DoctorNursePairResponse> pairs() { return staff.pairs(); }
+    @PostMapping("/doctor-nurse-pairs") public DoctorNursePairResponse assignPair(@Valid @RequestBody DoctorNursePairRequest r) { return staff.assignPair(r.doctorId(), r.nurseId()); }
+    @DeleteMapping("/doctor-nurse-pairs/{doctorId}") public ResponseEntity<Void> removePair(@PathVariable Long doctorId) { staff.removePair(doctorId); return ResponseEntity.noContent().build(); }
     private <T> ResponseEntity<T> created(T body) { return ResponseEntity.status(HttpStatus.CREATED).body(body); }
 }

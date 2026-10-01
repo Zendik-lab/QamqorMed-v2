@@ -152,6 +152,7 @@ public class StaffProfileService {
     }
 
     public DoctorProfile doctor(Long id) { return doctors.findById(id).orElseThrow(() -> new NotFoundException("Врач не найден")); }
+    public NurseProfile nurse(Long id) { return nurses.findById(id).orElseThrow(() -> new NotFoundException("Медсестра не найдена")); }
     public DoctorProfile attachExistingDoctor(User user, Specialty specialty, Clinic clinic, int years, String bio, String office) {
         if (user.getRole() != Role.DOCTOR) throw new BadRequestException("Профиль можно создать только для пользователя с ролью DOCTOR");
         DoctorProfile profile = new DoctorProfile(); profile.setUser(user); profile.setSpecialty(specialty); profile.setClinic(clinic); profile.setExperienceYears(years); profile.setBio(bio); profile.setOfficeNumber(office); profile.setDemo(false); profile.setActive(true);
@@ -169,15 +170,32 @@ public class StaffProfileService {
         if (byDoctor.isPresent()) {
             if (!byDoctor.get().getNurse().getId().equals(nurse.getId())) throw new ConflictException("У врача уже есть назначенная медсестра");
             byDoctor.get().setActive(true);
+            byDoctor.get().setUnassignedAt(null);
             return assignments.save(byDoctor.get());
         }
         var byNurse = assignments.findByNurseId(nurse.getId());
         if (byNurse.isPresent()) {
             if (!byNurse.get().getDoctor().getId().equals(doctor.getId())) throw new ConflictException("Медсестра уже закреплена за другим врачом");
             byNurse.get().setActive(true);
+            byNurse.get().setUnassignedAt(null);
             return assignments.save(byNurse.get());
         }
         DoctorNurseAssignment assignment = new DoctorNurseAssignment(); assignment.setDoctor(doctor); assignment.setNurse(nurse); assignment.setActive(true); return assignments.save(assignment);
+    }
+
+    @Transactional(readOnly = true)
+    public List<com.qamqormed.dto.DoctorNursePairResponse> pairs() {
+        return assignments.findAllByOrderByAssignedAtDesc().stream().map(com.qamqormed.dto.DoctorNursePairResponse::from).toList();
+    }
+
+    @Transactional
+    public com.qamqormed.dto.DoctorNursePairResponse assignPair(Long doctorId, Long nurseId) {
+        return com.qamqormed.dto.DoctorNursePairResponse.from(assignNurse(doctor(doctorId), nurse(nurseId)));
+    }
+
+    @Transactional
+    public void removePair(Long doctorId) {
+        assignments.findByDoctorId(doctorId).ifPresent(value -> { value.setActive(false); value.setUnassignedAt(java.time.Instant.now()); assignments.save(value); });
     }
 
     @Transactional(readOnly = true)
@@ -188,8 +206,45 @@ public class StaffProfileService {
         return NurseResponse.from(assignment.getNurse(), doctor);
     }
 
+    @Transactional(readOnly = true)
+    public DoctorResponse currentDoctor(Long userId) {
+        return doctorResponse(doctorForUser(userId));
+    }
+
+    @Transactional
+    public DoctorResponse updateCurrentDoctor(Long userId, DoctorProfileUpdateRequest request) {
+        DoctorProfile profile = doctorForUser(userId);
+        profile.setAvatarUrl(trimToNull(request.avatarUrl()));
+        profile.setAbout(trimToNull(request.about()));
+        profile.setEducation(trimToNull(request.education()));
+        profile.setQualificationCategory(trimToNull(request.qualificationCategory()));
+        profile.setCabinetNumber(trimToNull(request.cabinetNumber()));
+        if (request.consultationDurationMinutes() != null) profile.setConsultationDurationMinutes(request.consultationDurationMinutes());
+        return doctorResponse(profile);
+    }
+
+    @Transactional(readOnly = true)
+    public NurseResponse currentNurse(Long userId) {
+        NurseProfile profile = nurses.findByUserId(userId).filter(NurseProfile::isActive)
+                .orElseThrow(() -> new NotFoundException("Профиль медсестры не найден"));
+        return nurseResponse(profile);
+    }
+
+    @Transactional
+    public NurseResponse updateCurrentNurse(Long userId, NurseProfileUpdateRequest request) {
+        NurseProfile profile = nurses.findByUserId(userId).filter(NurseProfile::isActive)
+                .orElseThrow(() -> new NotFoundException("Профиль медсестры не найден"));
+        profile.setAvatarUrl(trimToNull(request.avatarUrl()));
+        profile.setCabinetNumber(trimToNull(request.cabinetNumber()));
+        profile.setEducation(trimToNull(request.education()));
+        profile.setQualification(trimToNull(request.qualification()));
+        if (request.experienceYears() != null) profile.setExperienceYears(request.experienceYears());
+        profile.setAbout(trimToNull(request.about()));
+        return nurseResponse(profile);
+    }
+
     private DoctorResponse doctorResponse(DoctorProfile profile) { return assignments.findActiveByDoctorId(profile.getId()).map(a -> DoctorResponse.from(profile, a.getNurse())).orElseGet(() -> DoctorResponse.from(profile)); }
-    private NurseResponse nurseResponse(NurseProfile profile) { return assignments.findByNurseId(profile.getId()).map(a -> NurseResponse.from(profile, a.getDoctor())).orElseGet(() -> NurseResponse.from(profile)); }
+    private NurseResponse nurseResponse(NurseProfile profile) { return assignments.findActiveByNurseId(profile.getId()).map(a -> NurseResponse.from(profile, a.getDoctor())).orElseGet(() -> NurseResponse.from(profile)); }
 
     private Specification<DoctorProfile> doctorSpecification(Long regionId, Long cityId, Long clinicId, Long specialtyId, String search, boolean publicOnly) {
         String normalizedSearch = search == null || search.isBlank() ? null : search.trim();
@@ -218,4 +273,9 @@ public class StaffProfileService {
     private String normalizePhone(String phone) { try { return PhoneNormalizer.normalize(phone); } catch (IllegalArgumentException exception) { throw new BadRequestException("Некорректный номер телефона"); } }
     private void validatePassword(String password) { if (!password.matches(".*[A-Za-zА-Яа-я].*") || !password.matches(".*\\d.*")) throw new BadRequestException("Пароль должен содержать букву и цифру"); }
     private String trimToNull(String value) { return value == null || value.isBlank() ? null : value.trim(); }
+
+    private DoctorProfile doctorForUser(Long userId) {
+        return doctors.findByUserId(userId).filter(DoctorProfile::isActive)
+                .orElseThrow(() -> new NotFoundException("Профиль врача не найден"));
+    }
 }

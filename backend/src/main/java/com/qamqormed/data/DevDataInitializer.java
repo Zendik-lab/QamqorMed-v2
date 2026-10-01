@@ -143,12 +143,12 @@ public class DevDataInitializer implements CommandLineRunner {
     private void ensureAppointmentStatusConstraint() {
         jdbcTemplate.execute("ALTER TABLE appointments DROP CONSTRAINT IF EXISTS appointments_status_check");
         jdbcTemplate.update("UPDATE appointments SET status = 'BOOKED' WHERE status = 'SCHEDULED'");
-        jdbcTemplate.update("UPDATE appointments SET status = 'CHECKED_IN' WHERE status = 'CONFIRMED'");
-        jdbcTemplate.update("UPDATE appointments SET status = 'DOCTOR_IN_PROGRESS' WHERE status = 'IN_PROGRESS'");
+        jdbcTemplate.update("UPDATE appointments SET status = 'ARRIVED' WHERE status = 'CHECKED_IN' OR status = 'CONFIRMED'");
+        jdbcTemplate.update("UPDATE appointments SET status = 'IN_APPOINTMENT' WHERE status = 'DOCTOR_IN_PROGRESS' OR status = 'IN_PROGRESS'");
         jdbcTemplate.execute("""
                 ALTER TABLE appointments ADD CONSTRAINT appointments_status_check
-                CHECK (status IN ('BOOKED', 'CHECKED_IN', 'NURSE_IN_PROGRESS', 'READY_FOR_DOCTOR',
-                                  'DOCTOR_IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'NO_SHOW'))
+                CHECK (status IN ('BOOKED', 'CONFIRMED', 'ARRIVED', 'PREPARING', 'READY',
+                                  'IN_APPOINTMENT', 'COMPLETED', 'CANCELLED', 'NO_SHOW'))
                 """);
     }
 

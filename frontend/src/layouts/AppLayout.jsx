@@ -8,15 +8,13 @@ import DevToolbar from '../components/DevToolbar.jsx'
 const menus = {
   PATIENT: [
     ['dashboard', '/patient', '⌂'], ['bookAppointment', '/doctors', '＋'], ['myAppointments', '/patient/my-appointments', '◷'],
-    ['dependents', '/patient/dependents', '♧'], ['medicalRecord', '/patient/medical-record', '▤'], ['documents', '/patient/documents', '□'], ['profile', '/patient/profile', '◉'],
+    ['dependents', '/patient/dependents', '♧'], ['medicalRecord', '/patient/medical-record', '▤'], ['diagnoses', '/patient/diagnoses', '◇'], ['prescriptions', '/patient/prescriptions', '⌁'], ['medications', '/patient/medications', '＋'], ['labResults', '/patient/lab-results', '▥'], ['certificates', '/patient/certificates', '▤'], ['documents', '/patient/documents', '□'], ['profile', '/patient/profile', '◉'],
   ],
   DOCTOR: [
-    ['dashboard', '/doctor', '⌂'], ['schedule', '/doctor/schedule', '◷'], ['patients', '/doctor/patients', '♧'], ['appointments', '/doctor/appointments', '＋'],
-    ['medicalRecords', '/doctor/medical-records', '▤'], ['referrals', '/doctor/referrals', '↗'], ['profile', '/doctor/profile', '◉'],
+    ['dashboard', '/doctor', '⌂'], ['today', '/doctor/today', '◷'], ['schedule', '/doctor/schedule', '▦'], ['appointments', '/doctor/appointments', '＋'], ['patients', '/doctor/patients', '♧'], ['profile', '/doctor/profile', '◉'],
   ],
   NURSE: [
-    ['dashboard', '/nurse', '⌂'], ['schedule', '/nurse/schedule', '◷'], ['todayPatients', '/nurse/today', '♧'], ['vitals', '/nurse/vitals', '⌁'],
-    ['appointments', '/nurse/appointments', '＋'], ['profile', '/nurse/profile', '◉'],
+    ['dashboard', '/nurse', '⌂'], ['todayPatients', '/nurse/today', '♧'], ['schedule', '/nurse/schedule', '▦'], ['appointments', '/nurse/appointments', '＋'], ['profile', '/nurse/profile', '◉'],
   ],
   ADMIN: [
     ['dashboard', '/admin', '⌂'], ['regions', '/admin/regions', '⌖'], ['cities', '/admin/cities', '▦'], ['clinics', '/admin/clinics', '＋'],

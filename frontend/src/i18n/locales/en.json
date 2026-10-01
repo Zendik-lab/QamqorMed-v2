@@ -2,6 +2,7 @@
   "common": {
     "home": "Home",
     "profile": "Profile",
+    "close": "Close",
     "logout": "Log out",
     "language": "Language",
     "loading": "Loading…",
@@ -20,7 +21,11 @@
     "notSpecified": "Not specified",
     "nextStage": "This feature will be available in a future stage.",
     "comingSoon": "Section in preparation",
-    "demo": "Demo mode"
+    "demo": "Demo mode",
+    "genderMale": "Male",
+    "genderFemale": "Female",
+    "genderOther": "Other",
+    "weekday": { "monday": "Mon", "tuesday": "Tue", "wednesday": "Wed", "thursday": "Thu", "friday": "Fri", "saturday": "Sat", "sunday": "Sun" }
   },
   "auth": {
     "login": "Sign in",
@@ -57,8 +62,15 @@
     "myAppointments": "My appointments",
     "dependents": "Dependents",
     "medicalRecord": "Medical record",
+    "diagnoses": "Diagnoses",
+    "prescriptions": "Prescriptions",
+    "medications": "Medicines",
+    "labResults": "Lab results",
+    "certificates": "Certificates",
     "documents": "Documents",
+    "profile": "Profile",
     "schedule": "Schedule",
+    "today": "Today",
     "patients": "Patients",
     "todayPatients": "Patients today",
     "vitals": "Patient vitals",
@@ -100,6 +112,11 @@
       "cardiology": "Cardiology",
       "therapy": "Therapy",
       "pediatrics": "Pediatrics"
+    }
+  },
+  "appointment": {
+    "status": {
+      "booked": "Booked", "confirmed": "Confirmed", "arrived": "Arrived", "preparing": "Preparing", "ready": "Ready for doctor", "inAppointment": "In appointment", "completed": "Completed", "cancelled": "Cancelled", "noShow": "No-show"
     }
   },
   "placeholder": {
@@ -167,6 +184,7 @@
     "descriptionField": "Description",
     "region": "Region",
     "city": "City",
+    "clinic": "Clinic",
     "specialty": "Specialty",
     "experience": "Experience (years)",
     "office": "Office",
@@ -186,8 +204,11 @@
     "editHint": "Login details are unchanged when editing",
     "count": "{{count}}",
     "searchStaff": "Search by name",
-    "doctor": "Doctor",
+    "doctor": "Doctor", "scheduleTitle": "Doctor schedules", "scheduleDescription": "Edit the single source schedule used by doctors, nurses and patient booking.", "workingIntervals": "Working intervals", "scheduleSingleSource": "Changes apply to every role immediately.", "slotDuration": "Slot, min", "break": "Break", "addInterval": "Add interval", "exceptions": "Schedule exceptions", "exceptionDescription": "Days off and special hours never silently remove existing appointments.", "dayOff": "Day off", "vacation": "Vacation", "unavailable": "Unavailable", "customHours": "Custom hours", "exceptionNote": "Note", "addException": "Add exception", "scheduleSaved": "Schedule saved.", "scheduleLoadError": "Could not load schedule.", "scheduleSaveError": "Could not save schedule.",
     "previous": "Previous",
     "next": "Next"
+  },
+  "staff": {
+    "doctorRole": "Professional doctor profile", "nurseRole": "Professional nurse profile", "doctorProfileTitle": "Doctor profile", "nurseProfileTitle": "Nurse profile", "doctorProfileDescription": "Work details and the clinical team in one profile.", "nurseProfileDescription": "Your profile, doctor and shift in one place.", "basicInformation": "Basic information", "workplace": "Workplace", "education": "Education", "about": "About", "myNurse": "My nurse", "myDoctor": "My doctor", "fullName": "Full name", "specialty": "Specialty", "cabinet": "Office", "consultationDuration": "Consultation length", "qualification": "Qualification", "experience": "Experience", "region": "Region", "city": "City", "clinic": "Clinic", "address": "Address", "position": "Position", "nursePosition": "Nurse", "nurseAtClinic": "Clinic team", "avatarUrl": "Avatar URL", "protectedFields": "Role, clinic, specialty and staff links are managed by administrators.", "notProvided": "Not provided yet.", "noNurse": "No nurse assigned yet.", "noDoctor": "No doctor assigned yet.", "workShift": "Work shift", "patientsToday": "Patients today", "waiting": "Waiting", "prepared": "Prepared", "inAppointment": "In appointment", "completed": "Completed", "totalPatients": "Total patients", "arrived": "Arrived", "waitingPreparation": "Waiting for preparation", "readyForDoctor": "Ready for doctor", "todaySchedule": "Today's schedule", "todayPatients": "Patients today", "openFullSchedule": "Open full schedule", "nextPatient": "Next patient", "noAppointments": "No appointments for the selected day.", "years": "years", "minutes": "min", "today": "Today", "viewSchedule": "View schedule", "profileSaved": "Profile saved.", "retry": "Retry", "loadError": "Could not load the profile.", "calendarLoading": "Loading calendar…", "calendarError": "Could not load the schedule.", "noSchedule": "The doctor's schedule is not configured yet.", "noScheduleDescription": "Ask an administrator to add working hours.", "previousPeriod": "Previous period", "nextPeriod": "Next period", "day": "Day", "week": "Week", "month": "Month", "time": "Time", "dayOff": "Day off", "vacation": "Vacation", "break": "Break", "now": "Now", "more": "more", "nursePreparedShort": "nurse prepared", "appointmentPreview": "Appointment preview", "age": "Age", "gender": "Gender", "recipientType": "Recipient", "patient": "Patient", "dependent": "Dependent", "nurseAssessment": "Nurse assessment", "pressure": "Blood pressure", "temperature": "Temperature", "pulse": "Pulse", "complaints": "Complaints", "notes": "Notes", "openAppointment": "Open appointment", "patientArrived": "Patient arrived", "startPreparation": "Start preparation", "continuePreparation": "Continue preparation", "readyForDoctor": "Patient ready for doctor", "unknownStatus": "Appointment status"
   }
 }

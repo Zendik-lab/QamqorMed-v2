@@ -26,7 +26,8 @@ public record NurseIntakeResponse(
     public static NurseIntakeResponse from(NurseIntake intake) {
         var appointment = intake.getAppointment();
         return new NurseIntakeResponse(intake.getId(), appointment.getId(),
-                appointment.getDependent() == null ? MedicalSubjectDto.self(appointment.getBookedBy()) : MedicalSubjectDto.dependent(appointment.getDependent()),
+                appointment.getDependent() != null ? MedicalSubjectDto.dependent(appointment.getDependent())
+                        : appointment.getPatientProfile() != null ? MedicalSubjectDto.self(appointment.getPatientProfile()) : MedicalSubjectDto.self(appointment.getBookedBy()),
                 intake.getTemperature(), intake.getBloodPressure(), intake.getBloodPressureSystolic(), intake.getBloodPressureDiastolic(),
                 intake.getPulse(), intake.getOxygenSaturation(), intake.getWeight(), intake.getHeight(), intake.getComplaintSummary(),
                 intake.getNurseNotes(), intake.getNotes(), intake.getCreatedAt(), intake.getUpdatedAt());

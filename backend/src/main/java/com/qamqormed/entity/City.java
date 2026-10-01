@@ -19,8 +19,11 @@ public class City {
     @Column(nullable = false) private boolean active = true;
     @Column(nullable = false, updatable = false) private Instant createdAt;
     @Column(nullable = false) private Instant updatedAt;
+    @OneToMany(mappedBy = "city", fetch = FetchType.LAZY)
+    private java.util.List<PatientProfile> patientProfiles = new java.util.ArrayList<>();
     @PrePersist void onCreate() { normalizeNames(); Instant now = Instant.now(); createdAt = now; updatedAt = now; }
     @PreUpdate void onUpdate() { normalizeNames(); updatedAt = Instant.now(); }
+    @PreRemove void detachPatientProfiles() { patientProfiles.forEach(profile -> profile.setCity(null)); }
     private void normalizeNames() {
         if (nameRu == null || nameRu.isBlank()) nameRu = name;
         if (name == null || name.isBlank()) name = nameRu;

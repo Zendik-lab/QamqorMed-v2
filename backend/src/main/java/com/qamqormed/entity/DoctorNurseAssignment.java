@@ -20,6 +20,7 @@ public class DoctorNurseAssignment {
     private NurseProfile nurse;
     @Column(nullable = false) private boolean active = true;
     @Column(nullable = false, updatable = false) private Instant assignedAt;
+    @Column private Instant unassignedAt;
 
     @PrePersist void onCreate() { assignedAt = Instant.now(); }
     public Long getId() { return id; }
@@ -30,4 +31,6 @@ public class DoctorNurseAssignment {
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
     public Instant getAssignedAt() { return assignedAt; }
+    public Instant getUnassignedAt() { return unassignedAt; }
+    public void setUnassignedAt(Instant unassignedAt) { this.unassignedAt = unassignedAt; }
 }

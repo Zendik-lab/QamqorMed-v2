@@ -41,6 +41,18 @@ public class MedicalVisit {
     @JoinColumn(name = "dependent_id")
     private Dependent dependent;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "patient_profile_id")
+    private PatientProfile patientProfile;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "doctor_profile_id")
+    private DoctorProfile doctorProfile;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "clinic_id")
+    private Clinic clinic;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "doctor_user_id", nullable = false)
     private User doctorUser;
@@ -92,6 +104,12 @@ public class MedicalVisit {
     public void setPatientUser(User patientUser) { this.patientUser = patientUser; }
     public Dependent getDependent() { return dependent; }
     public void setDependent(Dependent dependent) { this.dependent = dependent; }
+    public PatientProfile getPatientProfile() { return patientProfile; }
+    public void setPatientProfile(PatientProfile patientProfile) { this.patientProfile = patientProfile; }
+    public DoctorProfile getDoctorProfile() { return doctorProfile; }
+    public void setDoctorProfile(DoctorProfile doctorProfile) { this.doctorProfile = doctorProfile; }
+    public Clinic getClinic() { return clinic; }
+    public void setClinic(Clinic clinic) { this.clinic = clinic; }
     public User getDoctorUser() { return doctorUser; }
     public void setDoctorUser(User doctorUser) { this.doctorUser = doctorUser; }
     public String getChiefComplaint() { return chiefComplaint; }

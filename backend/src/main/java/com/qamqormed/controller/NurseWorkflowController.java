@@ -1,6 +1,7 @@
 package com.qamqormed.controller;
 
 import com.qamqormed.dto.AppointmentResponse;
+import com.qamqormed.dto.AppointmentStatusRequest;
 import com.qamqormed.dto.NurseIntakeRequest;
 import com.qamqormed.dto.NurseIntakeResponse;
 import com.qamqormed.dto.MedicalRecordResponse;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -73,5 +75,11 @@ public class NurseWorkflowController {
     @PostMapping("/{appointmentId}/ready-for-doctor")
     public AppointmentDetailsResponse readyForDoctor(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long appointmentId) {
         return workflow.readyForDoctor(principal.getId(), appointmentId);
+    }
+
+    @PatchMapping("/{appointmentId}/status")
+    public AppointmentResponse status(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long appointmentId,
+                                      @Valid @RequestBody AppointmentStatusRequest request) {
+        return workflow.updateNurseStatus(principal.getId(), appointmentId, request);
     }
 }
