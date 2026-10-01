@@ -103,3 +103,44 @@ export function changePassword(credentials) {
     body: JSON.stringify(credentials),
   })
 }
+
+function queryString(params) {
+  const query = new URLSearchParams()
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') query.set(key, value)
+  })
+  const value = query.toString()
+  return value ? `?${value}` : ''
+}
+
+export const getRegions = () => request('/api/regions')
+export const getRegionCities = (regionId) => request(`/api/regions/${regionId}/cities`)
+export const getCityClinics = (cityId) => request(`/api/cities/${cityId}/clinics`)
+export const getClinics = () => request('/api/clinics')
+export const getSpecialties = () => request('/api/specialties')
+export const getDoctors = (params) => request(`/api/doctors${queryString(params)}`)
+export const getDoctor = (id) => request(`/api/doctors/${id}`)
+
+export const adminGetRegions = () => request('/api/admin/regions')
+export const adminGetCities = () => request('/api/admin/cities')
+export const adminGetClinics = () => request('/api/admin/clinics')
+export const adminGetSpecialties = () => request('/api/admin/specialties')
+export const adminGetDoctors = () => request('/api/admin/doctors')
+export const adminGetNurses = () => request('/api/admin/nurses')
+
+function adminMutation(path, method, body) {
+  return request(path, { method, body: JSON.stringify(body) })
+}
+
+export const createAdminRegion = (body) => adminMutation('/api/admin/regions', 'POST', body)
+export const updateAdminRegion = (id, body) => adminMutation(`/api/admin/regions/${id}`, 'PUT', body)
+export const createAdminCity = (body) => adminMutation('/api/admin/cities', 'POST', body)
+export const updateAdminCity = (id, body) => adminMutation(`/api/admin/cities/${id}`, 'PUT', body)
+export const createAdminClinic = (body) => adminMutation('/api/admin/clinics', 'POST', body)
+export const updateAdminClinic = (id, body) => adminMutation(`/api/admin/clinics/${id}`, 'PUT', body)
+export const createAdminSpecialty = (body) => adminMutation('/api/admin/specialties', 'POST', body)
+export const updateAdminSpecialty = (id, body) => adminMutation(`/api/admin/specialties/${id}`, 'PUT', body)
+export const createAdminDoctor = (body) => adminMutation('/api/admin/doctors', 'POST', body)
+export const updateAdminDoctor = (id, body) => adminMutation(`/api/admin/doctors/${id}`, 'PUT', body)
+export const createAdminNurse = (body) => adminMutation('/api/admin/nurses', 'POST', body)
+export const updateAdminNurse = (id, body) => adminMutation(`/api/admin/nurses/${id}`, 'PUT', body)

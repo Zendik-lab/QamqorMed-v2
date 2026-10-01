@@ -3,11 +3,13 @@ import { ApiError } from '../api/apiClient.js'
 import { useAuth } from '../auth/AuthContext.jsx'
 import { navigate } from '../utils/navigation.js'
 import { normalizePhone } from '../utils/phone.js'
+import { useTranslation } from '../i18n/index.jsx'
 
 const initialForm = { firstName: '', lastName: '', phone: '', password: '', confirmPassword: '' }
 
 function RegisterPage() {
   const { register } = useAuth()
+  const { t } = useTranslation()
   const [form, setForm] = useState(initialForm)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
@@ -32,8 +34,8 @@ function RegisterPage() {
         setError(requestError.message)
         setFieldErrors(requestError.errors || {})
       } else {
-        setError(requestError.message || 'Не удалось создать аккаунт')
-        setFieldErrors({ phone: requestError.message || 'Некорректный номер телефона' })
+        setError(requestError.message || t('common.error'))
+        setFieldErrors({ phone: requestError.message || t('common.error') })
       }
     } finally {
       setSubmitting(false)
@@ -57,23 +59,23 @@ function RegisterPage() {
   )
 
   return (
-    <section className="form-card">
-      <div className="eyebrow">Только для пациента</div>
-      <h1>Создать аккаунт</h1>
-      <p className="form-description">После регистрации аккаунт получает роль PATIENT.</p>
+    <section className="form-card auth-card">
+      <div className="eyebrow">{t('auth.patientOnly')}</div>
+      <h1>{t('auth.createAccount')}</h1>
+      <p className="form-description">{t('auth.registrationRole')}</p>
       {error && <p className="error-message" role="alert">{error}</p>}
       <form onSubmit={submit} noValidate>
-        {field('firstName', 'Имя', 'text', 'given-name')}
-        {field('lastName', 'Фамилия', 'text', 'family-name')}
-        {field('phone', 'Номер телефона', 'tel', 'tel')}
-        {field('password', 'Пароль', 'password', 'new-password')}
-        {field('confirmPassword', 'Повтор пароля', 'password', 'new-password')}
-        <p className="hint-text">Минимум 8 символов, буква и цифра.</p>
+        {field('firstName', t('auth.firstName'), 'text', 'given-name')}
+        {field('lastName', t('auth.lastName'), 'text', 'family-name')}
+        {field('phone', t('auth.phone'), 'tel', 'tel')}
+        {field('password', t('auth.password'), 'password', 'new-password')}
+        {field('confirmPassword', t('auth.confirmPassword'), 'password', 'new-password')}
+        <p className="hint-text">{t('auth.passwordHint')}</p>
         <button className="button" type="submit" disabled={submitting}>
-          {submitting ? 'Создание аккаунта...' : 'Зарегистрироваться'}
+          {submitting ? t('auth.creatingAccount') : t('auth.register')}
         </button>
       </form>
-      <p className="form-footer">Уже есть аккаунт? <button className="text-button" type="button" onClick={() => navigate('/login')}>Войти</button></p>
+      <p className="form-footer">{t('auth.alreadyAccount')} <button className="text-button" type="button" onClick={() => navigate('/login')}>{t('auth.signIn')}</button></p>
     </section>
   )
 }

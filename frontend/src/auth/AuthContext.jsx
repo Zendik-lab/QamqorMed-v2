@@ -24,7 +24,7 @@ export function AuthProvider({ children }) {
     clearStoredToken()
     setState({ user: null, token: null, isAuthenticated: false, loading: false })
     if (shouldNavigate && window.location.pathname !== '/login') {
-      navigate('/login')
+      navigate('/login', { replace: true })
     }
   }, [])
 
@@ -52,13 +52,22 @@ export function AuthProvider({ children }) {
   const login = useCallback(async (credentials) => {
     const response = await loginRequest(credentials)
     storeToken(response.accessToken)
+    // Always hydrate the session from the backend so role and staff details
+    // are never taken from client-controlled state.
+    let currentUser
+    try {
+      currentUser = await getCurrentUser()
+    } catch (error) {
+      clearStoredToken()
+      throw error
+    }
     setState({
-      user: response.user,
+      user: currentUser,
       token: response.accessToken,
       isAuthenticated: true,
       loading: false,
     })
-    return response.user
+    return currentUser
   }, [])
 
   const register = useCallback((credentials) => registerRequest(credentials), [])

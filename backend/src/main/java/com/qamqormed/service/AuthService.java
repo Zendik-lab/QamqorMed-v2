@@ -11,6 +11,8 @@ import com.qamqormed.exception.BadRequestException;
 import com.qamqormed.exception.ConflictException;
 import com.qamqormed.exception.UnauthorizedException;
 import com.qamqormed.repository.UserRepository;
+import com.qamqormed.repository.DoctorProfileRepository;
+import com.qamqormed.repository.NurseProfileRepository;
 import com.qamqormed.security.JwtService;
 import com.qamqormed.util.PhoneNormalizer;
 import org.springframework.stereotype.Service;
@@ -27,11 +29,16 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final DoctorProfileRepository doctorProfiles;
+    private final NurseProfileRepository nurseProfiles;
 
-    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtService jwtService) {
+    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtService jwtService,
+                       DoctorProfileRepository doctorProfiles, NurseProfileRepository nurseProfiles) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+        this.doctorProfiles = doctorProfiles;
+        this.nurseProfiles = nurseProfiles;
     }
 
     @Transactional
@@ -50,7 +57,7 @@ public class AuthService {
         user.setPassword(passwordEncoder.encode(request.password()));
         user.setRole(Role.PATIENT);
         user.setEnabled(true);
-        return UserResponse.from(userRepository.save(user));
+        return response(userRepository.save(user));
     }
 
     @Transactional(readOnly = true)
@@ -70,7 +77,7 @@ public class AuthService {
             throw new UnauthorizedException(INVALID_CREDENTIALS);
         }
 
-        return new AuthResponse(jwtService.generateToken(user), "Bearer", UserResponse.from(user));
+        return new AuthResponse(jwtService.generateToken(user), "Bearer", response(user));
     }
 
     @Transactional(readOnly = true)
@@ -78,7 +85,7 @@ public class AuthService {
         User user = userRepository.findById(userId)
                 .filter(User::isEnabled)
                 .orElseThrow(() -> new UnauthorizedException("Требуется авторизация"));
-        return UserResponse.from(user);
+        return response(user);
     }
 
     @Transactional
@@ -113,5 +120,33 @@ public class AuthService {
         if (!password.equals(confirmation)) {
             throw new BadRequestException("Validation failed", Map.of(confirmationField, "Пароли не совпадают"));
         }
+    }
+
+    private UserResponse response(User user) {
+        if (user.getRole() == Role.DOCTOR) {
+            return doctorProfiles.findByUserId(user.getId())
+                    .map(profile -> UserResponse.from(
+                            user,
+                            new UserResponse.SpecialtySummary(profile.getSpecialty().getId(), profile.getSpecialty().getName()),
+                            clinic(profile.getClinic())
+                    ))
+                    .orElseGet(() -> UserResponse.from(user));
+        }
+        if (user.getRole() == Role.NURSE) {
+            return nurseProfiles.findByUserId(user.getId())
+                    .map(profile -> UserResponse.from(user, null, clinic(profile.getClinic())))
+                    .orElseGet(() -> UserResponse.from(user));
+        }
+        return UserResponse.from(user);
+    }
+
+    private UserResponse.ClinicSummary clinic(com.qamqormed.entity.Clinic clinic) {
+        var city = clinic.getCity();
+        return new UserResponse.ClinicSummary(
+                clinic.getId(),
+                clinic.getName(),
+                city.getName(),
+                city.getRegion().getName()
+        );
     }
 }

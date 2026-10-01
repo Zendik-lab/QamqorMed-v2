@@ -1,6 +1,6 @@
 # QamqorMed
 
-QamqorMed — учебная медицинская full-stack платформа. Этап 2 добавляет foundation для пользователей, авторизации и безопасности, не переходя к клиникам, врачам, расписанию или записи на приём.
+QamqorMed — учебная медицинская full-stack платформа. Этап 3 добавляет медицинскую структуру Казахстан → регион → город → клиника → специальность → врач, не переходя к расписанию и записи на приём.
 
 ## Стек и структура
 
@@ -13,12 +13,12 @@ QamqorMed — учебная медицинская full-stack платформ�
 ```text
 backend/src/main/java/com/qamqormed/
 ├── config/       # CORS и Spring Security
-├── controller/   # health, auth и временные role-test endpoints
-├── data/         # development-only demo users
+├── controller/   # auth, medical structure и admin API
+├── data/         # development-only demo users и medical structure
 ├── dto/          # request/response DTO
-├── entity/       # User и Role
+├── entity/       # User, Region, City, Clinic, Specialty и staff profiles
 ├── exception/    # единый JSON error handling
-├── repository/   # UserRepository
+├── repository/   # repositories пользователей, структуры и профилей
 ├── security/     # JWT filter/service/UserDetails
 ├── service/      # AuthService
 └── util/         # нормализация телефона
@@ -27,7 +27,7 @@ frontend/src/
 ├── api/          # централизованный API client
 ├── auth/         # AuthContext
 ├── components/   # guards и health status
-├── pages/        # login, register, dashboards
+├── pages/        # login, register, dashboards, поиск врача и admin CRUD
 ├── utils/        # navigation
 └── styles/
 ```
@@ -137,6 +137,68 @@ npm run build
 
 ## API examples
 
+## Medical structure (Этап 3)
+
+JPA-сущности и таблицы:
+
+- `regions` — `name`, уникальный `code`, `active`, timestamps;
+- `cities` — `region_id -> regions.id`;
+- `clinics` — `city_id -> cities.id`, адрес, телефон, описание;
+- `specialties` — уникальное имя и `active`;
+- `doctor_profiles` — `user_id -> users.id`, `specialty_id`, `clinic_id`, стаж, bio, кабинет;
+- `nurse_profiles` — `user_id -> users.id`, `clinic_id`, `active`.
+
+Связи используют внешние ключи, а для `cities.region_id`, `clinics.city_id`, `doctor_profiles.clinic_id` и `doctor_profiles.specialty_id` созданы индексы. DTO не возвращают JPA-связи напрямую и не содержат пароль или hash.
+
+Публичный (для любого авторизованного пользователя) API:
+
+```text
+GET /api/regions
+GET /api/regions/{id}
+GET /api/regions/{regionId}/cities
+GET /api/cities/{id}
+GET /api/cities/{cityId}/clinics
+GET /api/clinics
+GET /api/clinics/{id}
+GET /api/specialties
+GET /api/specialties/{id}
+GET /api/doctors?regionId=...&cityId=...&clinicId=...&specialtyId=...&search=...
+GET /api/doctors/{id}
+```
+
+Публичные списки показывают только активную иерархию. Admin API защищён `ROLE_ADMIN`:
+
+```text
+GET/POST/PUT /api/admin/regions
+GET/POST/PUT /api/admin/cities
+GET/POST/PUT /api/admin/clinics
+GET/POST/PUT /api/admin/specialties
+GET/POST/PUT /api/admin/doctors
+GET/POST/PUT /api/admin/nurses
+```
+
+`POST /api/admin/doctors` и `POST /api/admin/nurses` транзакционно создают `User` с принудительной ролью `DOCTOR`/`NURSE` и BCrypt-паролем. Обычная регистрация по-прежнему создаёт только `PATIENT`. Изменение `active=false` скрывает запись без удаления и не ломает внешние ключи.
+
+Frontend:
+
+- `/doctors` — каскадные select'ы региона, города, клиники и специальности, поиск по имени и карточки врачей;
+- `/doctors/:id` — профиль врача с клиникой, городом, регионом, стажем и bio;
+- Patient Dashboard содержит «Найти врача»;
+- Admin Dashboard `/admin` содержит CRUD-разделы регионов, городов, клиник, специальностей, врачей и медсестёр с loading/error/success состояниями.
+
+В dev seed добавляются Жамбылская область → Тараз → `QamqorMed Demo Clinic`, специальности `Кардиолог`, `Терапевт`, `Педиатр`, а существующие demo doctor/nurse получают профили. Seed идемпотентен и не запускается в `prod`.
+
+Быстрая проверка иерархии после входа:
+
+```powershell
+$regions = Invoke-RestMethod -Method Get -Uri http://localhost:8080/api/regions -Headers @{ Authorization = "Bearer $token" }
+$cities = Invoke-RestMethod -Method Get -Uri "http://localhost:8080/api/regions/$($regions[0].id)/cities" -Headers @{ Authorization = "Bearer $token" }
+$clinics = Invoke-RestMethod -Method Get -Uri "http://localhost:8080/api/cities/$($cities[0].id)/clinics" -Headers @{ Authorization = "Bearer $token" }
+$doctors = Invoke-RestMethod -Method Get -Uri "http://localhost:8080/api/doctors?clinicId=$($clinics[0].id)" -Headers @{ Authorization = "Bearer $token" }
+```
+
+Проверка security: Patient/Doctor/Nurse на `POST /api/admin/clinics` получают `403`; Admin получает `201`. Повторный region code или specialty name даёт `409`, отрицательный/слишком большой стаж — `400`. После деактивации клиники через `PUT /api/admin/clinics/{id}` она и её врачи исчезают из публичных списков.
+
 Регистрация пациента:
 
 ```powershell
@@ -200,4 +262,58 @@ git ls-files | Select-String -Pattern '(^|/)(\.env|\.env\.(local|development|pro
 
 Убедитесь, что `.env`, production secrets, database passwords, JWT secret и реальные credentials не попали в Git. Не коммитьте `frontend/dist`, `frontend/node_modules` или `backend/target`.
 
-Этап 2 заканчивается на authentication/security foundation. Клиники, профили специалистов, расписание, Appointment, медицинские карты и другие функции следующих этапов здесь не реализуются.
+Расписание, свободные слоты, Appointment, медицинские карты и другие функции следующего этапа здесь не реализуются.
+
+## Этап 3.5: кабинеты, role routing и языки
+
+После успешного `POST /api/auth/login` frontend сохраняет Bearer JWT, получает канонические данные через `GET /api/auth/me` и направляет пользователя по роли:
+
+```text
+PATIENT -> /patient
+DOCTOR  -> /doctor
+NURSE   -> /nurse
+ADMIN   -> /admin
+```
+
+`/api/auth/me` возвращает только безопасные поля пользователя. Для врача добавляются `specialty` и `clinic`, для медсестры — `clinic`; пароль, hash и security secrets в DTO отсутствуют. Роль назначается и проверяется backend, frontend не принимает роль от пользователя.
+
+Frontend использует общий `DashboardLayout` внутри `AppLayout`: sidebar строится по роли, активный пункт выделяется, header содержит имя, профиль, выбор языка и выход. Меню и страницы-заглушки разделены по ролям:
+
+- Patient: `/patient` и разделы записей, подопечных, карты и документов;
+- Doctor: `/doctor` и разделы расписания, пациентов, приёмов, карт и направлений;
+- Nurse: `/nurse` и разделы расписания, сегодняшних пациентов, показателей и приёмов;
+- Admin: `/admin` и существующий CRUD медицинской структуры, подключённый к общему layout без второй реализации.
+
+`ProtectedRoute` ждёт завершения проверки `/api/auth/me`, не показывает flash до загрузки и отправляет неавторизованных на `/login`. `RoleRoute` отправляет пользователя с неподходящей ролью на `/403`. Выход очищает token и заменяет текущую history entry, поэтому защищённый кабинет нельзя вернуть кнопкой Back без повторной авторизации.
+
+Локализация находится в `frontend/src/i18n/`:
+
+```text
+frontend/src/i18n/
+├── index.jsx
+└── locales/
+    ├── ru.json
+    ├── kk.json
+    └── en.json
+```
+
+Это небольшой i18n-провайдер без ручных `if` в JSX: язык меняется мгновенно, сохраняется в `localStorage` под ключом `qamqormed.language`, а по умолчанию используется `ru`. Чтобы добавить перевод, добавьте одинаковый dot-path в три JSON-файла и используйте `t('section.key')`. Для новой системной специальности можно расширить `localizeSpecialty` в `frontend/src/i18n/index.jsx`.
+
+Чтобы добавить пункт меню роли, добавьте запись `[translationKey, path, icon]` в соответствующий массив `menus` в `frontend/src/layouts/AppLayout.jsx`, затем добавьте маршрут в `roleSectionRoutes` в `frontend/src/App.jsx` и ключ в JSON-словари.
+
+Изменённые/добавленные backend endpoints этапа 3.5:
+
+- `GET /api/auth/me` сохранён и расширен безопасными `specialty`/`clinic` для staff-профилей;
+- существующие `GET/POST/PUT /api/admin/**` по-прежнему доступны только `ADMIN`;
+- существующие `/api/patient/**`, `/api/doctor/**`, `/api/nurse/**` по-прежнему ограничены соответствующими ролями в `SecurityConfig`.
+
+Запуск и проверки остаются прежними:
+
+```powershell
+cd backend
+mvn test
+
+cd ..\frontend
+npm install
+npm run build
+```

@@ -1,2 +1,2 @@
-/** Domain entities will be added in a later project stage. */
+/** Authentication and medical-structure domain entities. */
 package com.qamqormed.entity;

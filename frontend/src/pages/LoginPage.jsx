@@ -4,16 +4,18 @@ import { useAuth } from '../auth/AuthContext.jsx'
 import { navigate, useLocation } from '../utils/navigation.js'
 import { normalizePhone } from '../utils/phone.js'
 import { pathForRole } from '../components/RouteGuards.jsx'
+import { useTranslation } from '../i18n/index.jsx'
 
 const demoUsers = [
-  { label: 'Пациент', phone: '+77000000001', password: 'Patient123!' },
-  { label: 'Врач', phone: '+77000000002', password: 'Doctor123!' },
-  { label: 'Медсестра', phone: '+77000000003', password: 'Nurse123!' },
-  { label: 'Администратор', phone: '+77000000004', password: 'Admin123!' },
+  { labelKey: 'auth.demoPatient', phone: '+77000000001', password: 'Patient123!' },
+  { labelKey: 'auth.demoDoctor', phone: '+77000000002', password: 'Doctor123!' },
+  { labelKey: 'auth.demoNurse', phone: '+77000000003', password: 'Nurse123!' },
+  { labelKey: 'auth.demoAdmin', phone: '+77000000004', password: 'Admin123!' },
 ]
 
 function LoginPage() {
   const { login } = useAuth()
+  const { t } = useTranslation()
   const location = useLocation()
   const [form, setForm] = useState({ phone: '', password: '' })
   const [error, setError] = useState('')
@@ -31,22 +33,23 @@ function LoginPage() {
     setSubmitting(true)
     try {
       const user = await login({ ...form, phone: normalizePhone(form.phone) })
-      navigate(pathForRole(user.role))
+      navigate(pathForRole(user.role), { replace: true })
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : requestError.message || 'Не удалось выполнить вход')
+      setError(requestError instanceof ApiError ? requestError.message : requestError.message || t('common.error'))
     } finally {
       setSubmitting(false)
     }
   }
 
   return (
-    <section className="form-card">
-      <h1>Вход</h1>
-      <p className="form-description">Войдите в свой аккаунт</p>
-      {registered && <p className="success-message">Аккаунт создан. Теперь выполните вход.</p>}
+    <section className="form-card auth-card">
+      <div className="eyebrow">QamqorMed</div>
+      <h1>{t('auth.login')}</h1>
+      <p className="form-description">{t('auth.loginDescription')}</p>
+      {registered && <p className="success-message">{t('auth.registered')}</p>}
       {error && <p className="error-message" role="alert">{error}</p>}
       <form onSubmit={submit} noValidate>
-        <label className="field-label" htmlFor="login-phone">Номер телефона</label>
+        <label className="field-label" htmlFor="login-phone">{t('auth.phone')}</label>
         <input
           id="login-phone"
           name="phone"
@@ -57,7 +60,7 @@ function LoginPage() {
           onChange={updateField}
           required
         />
-        <label className="field-label" htmlFor="login-password">Пароль</label>
+        <label className="field-label" htmlFor="login-password">{t('auth.password')}</label>
         <input
           id="login-password"
           name="password"
@@ -68,14 +71,14 @@ function LoginPage() {
           required
         />
         <button className="button" type="submit" disabled={submitting}>
-          {submitting ? 'Вход...' : 'Войти'}
+          {submitting ? t('auth.signingIn') : t('auth.signIn')}
         </button>
       </form>
 
       {import.meta.env.DEV && (
         <div className="demo-panel">
-          <p className="demo-title">Тестовый вход</p>
-          <p className="demo-description">Только development, локальные вымышленные аккаунты.</p>
+          <p className="demo-title">{t('auth.demoLogin')}</p>
+          <p className="demo-description">{t('auth.demoDescription')}</p>
           <div className="demo-buttons">
             {demoUsers.map((demo) => (
               <button
@@ -84,14 +87,14 @@ function LoginPage() {
                 key={demo.phone}
                 onClick={() => setForm({ phone: demo.phone, password: demo.password })}
               >
-                {demo.label}
+                {t(demo.labelKey)}
               </button>
             ))}
           </div>
         </div>
       )}
 
-      <p className="form-footer">Нет аккаунта? <button className="text-button" type="button" onClick={() => navigate('/register')}>Зарегистрироваться</button></p>
+      <p className="form-footer">{t('auth.noAccount')} <button className="text-button" type="button" onClick={() => navigate('/register')}>{t('auth.register')}</button></p>
     </section>
   )
 }

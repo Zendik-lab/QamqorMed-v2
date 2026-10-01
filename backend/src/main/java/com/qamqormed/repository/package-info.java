@@ -1,2 +1,2 @@
-/** Persistence repositories will be added together with domain entities. */
+/** Persistence repositories for users, medical structure and staff profiles. */
 package com.qamqormed.repository;

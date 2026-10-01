@@ -1,2 +1,2 @@
-/** Application services will be added in later project stages. */
+/** Authentication, medical-structure and staff-profile application services. */
 package com.qamqormed.service;
