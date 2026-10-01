@@ -10,6 +10,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
 import java.math.BigDecimal;
@@ -36,7 +37,13 @@ public class NurseIntake {
     @Column(length = 30)
     private String bloodPressure;
 
+    private Integer bloodPressureSystolic;
+
+    private Integer bloodPressureDiastolic;
+
     private Integer pulse;
+
+    private Integer oxygenSaturation;
 
     @Column(precision = 6, scale = 2)
     private BigDecimal weight;
@@ -47,11 +54,27 @@ public class NurseIntake {
     @Column(length = 2000)
     private String notes;
 
+    @Column(length = 1000)
+    private String complaintSummary;
+
+    @Column(length = 2000)
+    private String nurseNotes;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
+    @Column(nullable = false)
+    private Instant updatedAt;
+
     @PrePersist
-    void onCreate() { createdAt = Instant.now(); }
+    void onCreate() {
+        Instant now = Instant.now();
+        createdAt = now;
+        updatedAt = now;
+    }
+
+    @PreUpdate
+    void onUpdate() { updatedAt = Instant.now(); }
 
     public Long getId() { return id; }
     public Appointment getAppointment() { return appointment; }
@@ -62,13 +85,24 @@ public class NurseIntake {
     public void setTemperature(BigDecimal temperature) { this.temperature = temperature; }
     public String getBloodPressure() { return bloodPressure; }
     public void setBloodPressure(String bloodPressure) { this.bloodPressure = bloodPressure; }
+    public Integer getBloodPressureSystolic() { return bloodPressureSystolic; }
+    public void setBloodPressureSystolic(Integer bloodPressureSystolic) { this.bloodPressureSystolic = bloodPressureSystolic; }
+    public Integer getBloodPressureDiastolic() { return bloodPressureDiastolic; }
+    public void setBloodPressureDiastolic(Integer bloodPressureDiastolic) { this.bloodPressureDiastolic = bloodPressureDiastolic; }
     public Integer getPulse() { return pulse; }
     public void setPulse(Integer pulse) { this.pulse = pulse; }
+    public Integer getOxygenSaturation() { return oxygenSaturation; }
+    public void setOxygenSaturation(Integer oxygenSaturation) { this.oxygenSaturation = oxygenSaturation; }
     public BigDecimal getWeight() { return weight; }
     public void setWeight(BigDecimal weight) { this.weight = weight; }
     public BigDecimal getHeight() { return height; }
     public void setHeight(BigDecimal height) { this.height = height; }
     public String getNotes() { return notes; }
     public void setNotes(String notes) { this.notes = notes; }
+    public String getComplaintSummary() { return complaintSummary; }
+    public void setComplaintSummary(String complaintSummary) { this.complaintSummary = complaintSummary; }
+    public String getNurseNotes() { return nurseNotes; }
+    public void setNurseNotes(String nurseNotes) { this.nurseNotes = nurseNotes; }
     public Instant getCreatedAt() { return createdAt; }
+    public Instant getUpdatedAt() { return updatedAt; }
 }

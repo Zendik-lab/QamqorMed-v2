@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -46,13 +48,17 @@ public class DevDataInitializer implements CommandLineRunner {
     private final DoctorProfileRepository doctors;
     private final NurseProfileRepository nurses;
     private final DoctorNurseAssignmentRepository assignments;
+    private final AppointmentRepository appointments;
     private final StaffProfileService staff;
+    private final JdbcTemplate jdbcTemplate;
     private String demoPasswordHash;
 
     public DevDataInitializer(UserRepository users, PasswordEncoder passwordEncoder, RegionRepository regions,
                               CityRepository cities, ClinicRepository clinics, SpecialtyRepository specialties,
                               ClinicSpecialtyRepository clinicSpecialties, DoctorProfileRepository doctors,
-                              NurseProfileRepository nurses, DoctorNurseAssignmentRepository assignments, StaffProfileService staff) {
+                              NurseProfileRepository nurses, DoctorNurseAssignmentRepository assignments,
+                              AppointmentRepository appointments, StaffProfileService staff,
+                              JdbcTemplate jdbcTemplate) {
         this.users = users;
         this.passwordEncoder = passwordEncoder;
         this.regions = regions;
@@ -63,7 +69,9 @@ public class DevDataInitializer implements CommandLineRunner {
         this.doctors = doctors;
         this.nurses = nurses;
         this.assignments = assignments;
+        this.appointments = appointments;
         this.staff = staff;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @Override
@@ -92,6 +100,8 @@ public class DevDataInitializer implements CommandLineRunner {
         retireDemoStaffOutsideCatalog(catalogClinics, catalogSpecialties);
         linkAllDemoSpecialties(catalogClinics, catalogSpecialties);
         createAllDemoStaff(catalogClinics, catalogSpecialties);
+        ensureAppointmentStatusConstraint();
+        seedDemoWorkflowAppointment();
         ValidationReport validation = validateCatalog(catalogClinics, catalogSpecialties);
         if (!validation.success()) {
             throw new IllegalStateException("QamqorMed DEMO catalog validation failed: " + validation);
@@ -104,6 +114,42 @@ public class DevDataInitializer implements CommandLineRunner {
         log.info("Catalog validation: missing clinic-specialty doctors={}, doctors without nurse={}, nurses without doctor={}, cross-clinic assignments={}, duplicate doctors={}, duplicate nurses={}, duplicate assignments={}",
                 validation.missingClinicSpecialtyDoctors(), validation.doctorsWithoutNurse(), validation.nursesWithoutDoctor(),
                 validation.crossClinicAssignments(), validation.duplicateDoctors(), validation.duplicateNurses(), validation.duplicateAssignments());
+    }
+
+    private void seedDemoWorkflowAppointment() {
+        User patient = users.findByPhone("+77000000001").orElse(null);
+        User doctorUser = users.findByPhone("+77000000002").orElse(null);
+        if (patient == null || doctorUser == null || appointments.existsByBookedByIdAndNote(patient.getId(), "DEV_WORKFLOW_SEED")) return;
+        DoctorProfile doctor = doctors.findByUserId(doctorUser.getId()).filter(DoctorProfile::isActive).orElse(null);
+        if (doctor == null) return;
+        patient.setPreferredRegion(doctor.getClinic().getCity().getRegion());
+        patient.setPreferredCity(doctor.getClinic().getCity());
+        users.save(patient);
+        Appointment appointment = new Appointment();
+        appointment.setBookedBy(patient);
+        appointment.setDoctor(doctor);
+        appointment.setAppointmentAt(LocalDateTime.now().plusDays(1).withHour(10).withMinute(0).withSecond(0).withNano(0));
+        appointment.setStatus(AppointmentStatus.BOOKED);
+        appointment.setNote("DEV_WORKFLOW_SEED");
+        appointments.save(appointment);
+        log.info("Seeded development workflow appointment {} for Demo Patient -> {}", appointment.getId(), doctorUser.getPhone());
+    }
+
+    /**
+     * Hibernate update does not reliably replace an old PostgreSQL CHECK constraint.
+     * Existing dev databases may still contain the pre-workflow constraint that
+     * rejects BOOKED, so repair it before seeding the workflow appointment.
+     */
+    private void ensureAppointmentStatusConstraint() {
+        jdbcTemplate.execute("ALTER TABLE appointments DROP CONSTRAINT IF EXISTS appointments_status_check");
+        jdbcTemplate.update("UPDATE appointments SET status = 'BOOKED' WHERE status = 'SCHEDULED'");
+        jdbcTemplate.update("UPDATE appointments SET status = 'CHECKED_IN' WHERE status = 'CONFIRMED'");
+        jdbcTemplate.update("UPDATE appointments SET status = 'DOCTOR_IN_PROGRESS' WHERE status = 'IN_PROGRESS'");
+        jdbcTemplate.execute("""
+                ALTER TABLE appointments ADD CONSTRAINT appointments_status_check
+                CHECK (status IN ('BOOKED', 'CHECKED_IN', 'NURSE_IN_PROGRESS', 'READY_FOR_DOCTOR',
+                                  'DOCTOR_IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'NO_SHOW'))
+                """);
     }
 
     private Map<String, Region> importRegions() throws IOException {

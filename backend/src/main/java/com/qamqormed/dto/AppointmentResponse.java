@@ -31,7 +31,7 @@ public record AppointmentResponse(
                 new PersonSummary(appointment.getBookedBy().getId(), fullName(appointment.getBookedBy().getLastName(), appointment.getBookedBy().getFirstName(), appointment.getBookedBy().getMiddleName())),
                 new StaffSummary(doctor.getId(), doctorUser.getId(), fullName(doctorUser.getLastName(), doctorUser.getFirstName(), doctorUser.getMiddleName()), doctor.getSpecialty().getName()),
                 new ClinicSummary(clinic.getId(), clinic.getName(), city.getName(), city.getRegion().getName()),
-                appointment.getAppointmentAt(), appointment.getStatus().name(), appointment.getNote());
+                appointment.getAppointmentAt(), appointment.getCanonicalStatus().name(), appointment.getNote());
     }
 
     private static String fullName(String lastName, String firstName, String middleName) {

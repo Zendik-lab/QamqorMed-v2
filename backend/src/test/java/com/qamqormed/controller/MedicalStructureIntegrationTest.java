@@ -12,6 +12,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -35,17 +37,23 @@ class MedicalStructureIntegrationTest {
     @Autowired SpecialtyRepository specialties;
     @Autowired DoctorProfileRepository doctors;
     @Autowired NurseProfileRepository nurses;
+    @Autowired DoctorNurseAssignmentRepository assignments;
     @Autowired PasswordEncoder encoder;
     @Autowired NurseIntakeRepository intakes;
     @Autowired MedicalRecordRepository records;
+    @Autowired MedicalDocumentRepository documents;
+    @Autowired MedicalVisitRepository visits;
+    @Autowired ReferralRepository referrals;
+    @Autowired TreatmentRepository treatments;
     @Autowired AppointmentRepository appointments;
     @Autowired DependentRepository dependents;
     @Autowired TimeSlotRepository timeSlots;
 
     @BeforeEach
     void clean() {
+        documents.deleteAll(); referrals.deleteAll(); treatments.deleteAll(); visits.deleteAll();
         intakes.deleteAll(); records.deleteAll(); appointments.deleteAll(); dependents.deleteAll();
-        timeSlots.deleteAll(); doctors.deleteAll(); nurses.deleteAll();
+        assignments.deleteAll(); timeSlots.deleteAll(); doctors.deleteAll(); nurses.deleteAll();
         users.findAll().forEach(user -> { user.setPreferredCity(null); user.setPreferredRegion(null); users.save(user); });
         clinics.deleteAll(); cities.deleteAll(); specialties.deleteAll(); regions.deleteAll(); users.deleteAll();
     }
@@ -120,6 +128,69 @@ class MedicalStructureIntegrationTest {
         mockMvc.perform(post("/api/admin/nurses").header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON).content(nursePayload))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.phone").value("+77000000107")).andExpect(jsonPath("$.password").doesNotExist());
         org.junit.jupiter.api.Assertions.assertEquals(Role.NURSE, users.findByPhone("+77000000107").orElseThrow().getRole());
+    }
+
+    @Test
+    void completesPatientDependentWorkflowAndReturnsStructuredResult() throws Exception {
+        User patient = user("+77000000111", Role.PATIENT);
+        User doctorUser = user("+77000000112", Role.DOCTOR);
+        User nurseUser = user("+77000000113", Role.NURSE);
+
+        Region region = new Region(); region.setName("Workflow Region"); region.setCode("WORKFLOW_REGION"); regions.save(region);
+        City city = new City(); city.setName("Workflow City"); city.setRegion(region); cities.save(city);
+        Clinic clinic = new Clinic(); clinic.setName("Workflow Clinic"); clinic.setCity(city); clinics.save(clinic);
+        Specialty specialty = new Specialty(); specialty.setName("Workflow Therapist"); specialties.save(specialty);
+        DoctorProfile doctor = new DoctorProfile(); doctor.setUser(doctorUser); doctor.setClinic(clinic); doctor.setSpecialty(specialty); doctor.setExperienceYears(5); doctors.save(doctor);
+        NurseProfile nurse = new NurseProfile(); nurse.setUser(nurseUser); nurse.setClinic(clinic); nurses.save(nurse);
+        DoctorNurseAssignment assignment = new DoctorNurseAssignment(); assignment.setDoctor(doctor); assignment.setNurse(nurse); assignment.setActive(true); assignments.save(assignment);
+
+        Dependent child = new Dependent(); child.setOwner(patient); child.setFirstName("Мария"); child.setLastName("Иванова");
+        child.setDateOfBirth(LocalDate.now().minusYears(8)); child.setGender("FEMALE"); child.setRelationship(RelationshipType.CHILD); dependents.save(child);
+
+        Appointment appointment = new Appointment(); appointment.setBookedBy(patient); appointment.setDependent(child); appointment.setDoctor(doctor);
+        appointment.setAppointmentAt(LocalDateTime.now().plusDays(2).withSecond(0).withNano(0)); appointment.setStatus(AppointmentStatus.BOOKED); appointments.save(appointment);
+
+        String patientToken = login(patient.getPhone());
+        String doctorToken = login(doctorUser.getPhone());
+        String nurseToken = login(nurseUser.getPhone());
+
+        mockMvc.perform(get("/api/nurse/appointments/{id}", appointment.getId()).header("Authorization", "Bearer " + nurseToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.subject.fullName").value("Иванова Мария"));
+        mockMvc.perform(post("/api/nurse/appointments/{id}/start", appointment.getId()).header("Authorization", "Bearer " + nurseToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("NURSE_IN_PROGRESS"));
+        mockMvc.perform(put("/api/nurse/appointments/{id}/assessment", appointment.getId()).header("Authorization", "Bearer " + nurseToken)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"temperature\":36.7,\"bloodPressureSystolic\":110,\"bloodPressureDiastolic\":70,\"pulse\":80,\"oxygenSaturation\":99,\"complaintSummary\":\"Кашель\",\"nurseNotes\":\"Без тревожных признаков\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.complaintSummary").value("Кашель"));
+        mockMvc.perform(post("/api/nurse/appointments/{id}/ready-for-doctor", appointment.getId()).header("Authorization", "Bearer " + nurseToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("READY_FOR_DOCTOR"));
+
+        mockMvc.perform(get("/api/doctor/appointments/{id}/details", appointment.getId()).header("Authorization", "Bearer " + doctorToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.nurseAssessment.complaintSummary").value("Кашель"));
+        mockMvc.perform(post("/api/doctor/appointments/{id}/start", appointment.getId()).header("Authorization", "Bearer " + doctorToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("DOCTOR_IN_PROGRESS"));
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/doctor/appointments/{id}/visit", appointment.getId()).header("Authorization", "Bearer " + doctorToken)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"chiefComplaint\":\"Кашель\",\"anamnesis\":\"Третий день\",\"diagnosis\":\"ОРВИ\",\"diagnosisCode\":\"J06.9\",\"recommendations\":\"Покой и питьё\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.diagnosis").value("ОРВИ"));
+        mockMvc.perform(post("/api/doctor/appointments/{id}/prescriptions", appointment.getId()).header("Authorization", "Bearer " + doctorToken)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"Парацетамол\",\"dosage\":\"500 мг\",\"frequency\":\"2 раза в день\",\"duration\":\"3 дня\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.name").value("Парацетамол"));
+        mockMvc.perform(post("/api/doctor/appointments/{id}/referrals", appointment.getId()).header("Authorization", "Bearer " + doctorToken)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"referralType\":\"LABORATORY\",\"reason\":\"Общий анализ крови\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("CREATED"));
+        mockMvc.perform(post("/api/doctor/appointments/{id}/documents", appointment.getId()).header("Authorization", "Bearer " + doctorToken)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"type\":\"CONCLUSION\",\"title\":\"Заключение врача\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.title").value("Заключение врача"));
+        mockMvc.perform(post("/api/doctor/appointments/{id}/complete", appointment.getId()).header("Authorization", "Bearer " + doctorToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("COMPLETED"));
+
+        mockMvc.perform(get("/api/patients/{id}/medical-history", child.getId()).header("Authorization", "Bearer " + patientToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$[0].diagnosis").value("ОРВИ"))
+                .andExpect(jsonPath("$[0].treatments[0].name").value("Парацетамол"));
+        mockMvc.perform(get("/api/appointments/{id}/result", appointment.getId()).header("Authorization", "Bearer " + patientToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.documents[0].title").value("Заключение врача"));
+        mockMvc.perform(get("/api/patients/{id}/medical-history", doctorUser.getId()).header("Authorization", "Bearer " + patientToken))
+                .andExpect(status().isNotFound());
     }
 
     private User user(String phone, Role role) {

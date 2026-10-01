@@ -38,6 +38,15 @@ public class AppointmentService {
         return appointments.findAllByBookedByIdOrderByAppointmentAtDesc(userId).stream().map(AppointmentResponse::from).toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<AppointmentResponse> patientAppointmentsForSubject(Long userId, Long patientId) {
+        patients.patient(userId);
+        if (!userId.equals(patientId)) patients.dependent(userId, patientId);
+        return patientAppointments(userId).stream()
+                .filter(item -> item.subject().id().equals(patientId))
+                .toList();
+    }
+
     @Transactional
     public AppointmentResponse createForPatient(Long userId, AppointmentCreateRequest request) {
         User owner = patients.patient(userId);
@@ -61,7 +70,7 @@ public class AppointmentService {
         appointment.setTimeSlot(slot);
         appointment.setAppointmentAt(request.appointmentAt());
         appointment.setNote(trimToNull(request.note()));
-        appointment.setStatus(AppointmentStatus.SCHEDULED);
+        appointment.setStatus(AppointmentStatus.BOOKED);
         return AppointmentResponse.from(appointments.save(appointment));
     }
 
@@ -77,7 +86,10 @@ public class AppointmentService {
     public void cancelForPatient(Long userId, Long appointmentId) {
         Appointment appointment = appointments.findByIdAndBookedById(appointmentId, userId)
                 .orElseThrow(() -> new NotFoundException("Запись не найдена"));
-        if (appointment.getStatus() == AppointmentStatus.COMPLETED) throw new BadRequestException("Завершённую запись нельзя отменить");
+        AppointmentStatus current = appointment.getCanonicalStatus();
+        if (current != AppointmentStatus.BOOKED && current != AppointmentStatus.CHECKED_IN) {
+            throw new BadRequestException("На этом этапе запись уже нельзя отменить");
+        }
         appointment.setStatus(AppointmentStatus.CANCELLED);
         appointments.save(appointment);
     }

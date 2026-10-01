@@ -3,6 +3,7 @@ package com.qamqormed.service;
 import com.qamqormed.dto.DependentRequest;
 import com.qamqormed.dto.DependentResponse;
 import com.qamqormed.dto.PatientProfileDto;
+import com.qamqormed.dto.PatientSubjectResponse;
 import com.qamqormed.dto.PatientProfileUpdateRequest;
 import com.qamqormed.dto.PatientLocationDto;
 import com.qamqormed.dto.PatientLocationUpdateRequest;
@@ -39,6 +40,16 @@ public class PatientService {
 
     @Transactional(readOnly = true)
     public PatientProfileDto profile(Long userId) { return PatientProfileDto.from(patient(userId)); }
+
+    @Transactional(readOnly = true)
+    public List<PatientSubjectResponse> subjects(Long userId) {
+        User owner = patient(userId);
+        List<PatientSubjectResponse> result = new java.util.ArrayList<>();
+        result.add(PatientSubjectResponse.self(owner));
+        dependents.findAllByOwnerIdAndActiveTrueOrderByLastNameAscFirstNameAsc(userId)
+                .forEach(dependent -> result.add(PatientSubjectResponse.dependent(dependent)));
+        return result;
+    }
 
     @Transactional(readOnly = true)
     public PatientLocationDto location(Long userId) { return PatientLocationDto.from(patient(userId)); }

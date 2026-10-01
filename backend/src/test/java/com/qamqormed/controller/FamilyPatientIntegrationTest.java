@@ -13,6 +13,10 @@ import com.qamqormed.repository.AppointmentRepository;
 import com.qamqormed.repository.DependentRepository;
 import com.qamqormed.repository.DoctorProfileRepository;
 import com.qamqormed.repository.MedicalRecordRepository;
+import com.qamqormed.repository.MedicalDocumentRepository;
+import com.qamqormed.repository.MedicalVisitRepository;
+import com.qamqormed.repository.ReferralRepository;
+import com.qamqormed.repository.TreatmentRepository;
 import com.qamqormed.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -46,12 +50,20 @@ class FamilyPatientIntegrationTest {
     @Autowired DependentRepository dependents;
     @Autowired AppointmentRepository appointments;
     @Autowired MedicalRecordRepository records;
+    @Autowired MedicalDocumentRepository documents;
+    @Autowired MedicalVisitRepository visits;
+    @Autowired ReferralRepository referrals;
+    @Autowired TreatmentRepository treatments;
     @Autowired DoctorProfileRepository doctors;
     @Autowired com.qamqormed.repository.TimeSlotRepository timeSlots;
     @Autowired PasswordEncoder encoder;
 
     @BeforeEach
     void clean() {
+        documents.deleteAll();
+        referrals.deleteAll();
+        treatments.deleteAll();
+        visits.deleteAll();
         records.deleteAll();
         appointments.deleteAll();
         timeSlots.deleteAll();

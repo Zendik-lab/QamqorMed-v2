@@ -49,6 +49,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/api/health", "/api/auth/login", "/api/auth/register", "/api/dev/**").permitAll()
                         .requestMatchers("/api/patient/**").hasRole("PATIENT")
+                        .requestMatchers("/api/patient-profiles", "/api/patients/**", "/api/appointments/**").hasRole("PATIENT")
                         .requestMatchers("/api/doctor/**").hasRole("DOCTOR")
                         .requestMatchers("/api/nurse/**").hasRole("NURSE")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")

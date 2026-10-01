@@ -749,8 +749,35 @@ h1 {
 .staff-appointment__meta span { color: #6d8290; font-size: 0.8rem; }
 .staff-entry-form { display: grid; gap: 0.9rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #edf3f5; }
 
+.workflow-page { max-width: 1240px !important; }
+.workflow-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; margin-bottom: 1rem; padding: 1rem 1.15rem; border: 1px solid var(--line, #dce8ee); border-radius: 1rem; background: #fff; }
+.workflow-layout { display: grid; grid-template-columns: minmax(300px, .9fr) minmax(420px, 1.35fr); align-items: start; gap: 1rem; }
+.staff-appointment--selected { border-color: #2b8190; box-shadow: 0 0 0 2px rgba(43, 129, 144, .13); }
+.workflow-detail { position: sticky; top: 96px; display: grid; gap: 1rem; padding: 1.2rem; border: 1px solid var(--line, #dce8ee); border-radius: 1rem; background: #fff; box-shadow: 0 10px 30px rgba(18, 48, 74, .06); }
+.workflow-detail__header, .stage-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.workflow-detail__header h2, .stage-heading h3 { margin: .25rem 0; }
+.workflow-detail__header p { margin: 0; color: #6d8290; }
+.workflow-patient-card, .assessment-summary, .visit-result { display: grid; gap: .35rem; padding: .9rem 1rem; border-radius: .8rem; background: #f4faf9; }
+.workflow-patient-card strong, .assessment-summary strong, .visit-result h4 { color: #17626a; }
+.workflow-patient-card small, .assessment-summary small { color: #6d8290; }
+.workflow-stage { display: grid; gap: .85rem; padding-top: 1rem; border-top: 1px solid #edf3f5; }
+.workflow-stage .form-grid { gap: .75rem; }
+.workflow-subform { display: grid; gap: .75rem; padding-top: .9rem; border-top: 1px solid #edf3f5; }
+.workflow-subform h4, .visit-result h4 { margin: 0; }
+.visit-result p { margin: .35rem 0 0; white-space: pre-wrap; }
+.visit-result p strong, .visit-list > strong { display: block; margin-bottom: .2rem; color: #547483; font-size: .78rem; letter-spacing: .05em; text-transform: uppercase; }
+.visit-list { display: grid; gap: .25rem; margin-top: .55rem; }
+.visit-list span { color: #31576c; }
+.status--booked { color: #82622a; background: #fff5d6; }
+.status--checked_in, .status--nurse_in_progress { color: #286e5a; background: #e6f6ee; }
+.status--ready_for_doctor { color: #6b4e91; background: #f1eafa; }
+.status--doctor_in_progress { color: #1f6382; background: #e8f4fa; }
+.status--no_show { color: #8b5555; background: #fff0f0; }
+
 @media (max-width: 700px) {
   .staff-appointment__meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .workflow-filters, .workflow-layout { grid-template-columns: 1fr; }
+  .workflow-detail { position: static; }
 }
 
 /* Development role switcher */

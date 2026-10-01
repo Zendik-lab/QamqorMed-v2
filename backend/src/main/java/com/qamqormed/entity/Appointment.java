@@ -51,7 +51,7 @@ public class Appointment {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
-    private AppointmentStatus status = AppointmentStatus.SCHEDULED;
+    private AppointmentStatus status = AppointmentStatus.BOOKED;
 
     @Column(length = 1000)
     private String note;
@@ -85,6 +85,7 @@ public class Appointment {
     public void setAppointmentAt(LocalDateTime appointmentAt) { this.appointmentAt = appointmentAt; }
     public AppointmentStatus getStatus() { return status; }
     public void setStatus(AppointmentStatus status) { this.status = status; }
+    public AppointmentStatus getCanonicalStatus() { return status == null ? null : status.canonical(); }
     public String getNote() { return note; }
     public void setNote(String note) { this.note = note; }
     public Instant getCreatedAt() { return createdAt; }
