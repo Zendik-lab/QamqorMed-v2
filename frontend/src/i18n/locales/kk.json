@@ -41,12 +41,6 @@
     "creatingAccount": "Аккаунт жасалуда…",
     "alreadyAccount": "Аккаунтыңыз бар ма?",
     "passwordHint": "Кемінде 8 таңба, әріп және сан.",
-    "demoLogin": "Тест арқылы кіру",
-    "demoDescription": "Тек development ортасында, жергілікті демо аккаунттар.",
-    "demoPatient": "Пациент",
-    "demoDoctor": "Дәрігер",
-    "demoNurse": "Мейірбике",
-    "demoAdmin": "Әкімші",
     "checking": "Авторизация тексерілуде…",
     "redirecting": "Кіру бетіне бағытталуда…",
     "openingCabinet": "Кабинетіңіз ашылуда…"
@@ -149,7 +143,13 @@
     "allDoctors": "← Барлық дәрігерлер",
     "years": "жыл",
     "loadingProfile": "Дәрігер профилі жүктелуде…",
-    "loadingDirectories": "Анықтамалықтар жүктелуде…"
+    "loadingDirectories": "Анықтамалықтар жүктелуде…",
+    "demoNotice": "анықтамалықтағы барлық қызметкер — DEMO деректері",
+    "demo": "DEMO",
+    "previous": "Артқа",
+    "next": "Келесі",
+    "assignedNurse": "Бекітілген медбике",
+    "demoDescription": "Оқу профилі. Бұл дәрігер мен медбике көрсетілген медициналық ұйымның қызметкерлері емес."
   },
   "admin": {
     "onlyAdmin": "Тек әкімшіге арналған",
@@ -184,6 +184,10 @@
     "lastName": "Тегі",
     "password": "Құпиясөз",
     "editHint": "Өзгерткенде кіру деректері өзгермейді",
-    "count": "{{count}}"
+    "count": "{{count}}",
+    "searchStaff": "Аты-жөні бойынша іздеу",
+    "doctor": "Дәрігер",
+    "previous": "Артқа",
+    "next": "Келесі"
   }
 }

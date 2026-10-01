@@ -4,14 +4,8 @@ import { useAuth } from '../auth/AuthContext.jsx'
 import { navigate, useLocation } from '../utils/navigation.js'
 import { normalizePhone } from '../utils/phone.js'
 import { pathForRole } from '../components/RouteGuards.jsx'
+import { isDevelopment } from '../config/environment.js'
 import { useTranslation } from '../i18n/index.jsx'
-
-const demoUsers = [
-  { labelKey: 'auth.demoPatient', phone: '+77000000001', password: 'Patient123!' },
-  { labelKey: 'auth.demoDoctor', phone: '+77000000002', password: 'Doctor123!' },
-  { labelKey: 'auth.demoNurse', phone: '+77000000003', password: 'Nurse123!' },
-  { labelKey: 'auth.demoAdmin', phone: '+77000000004', password: 'Admin123!' },
-]
 
 function LoginPage() {
   const { login } = useAuth()
@@ -75,22 +69,12 @@ function LoginPage() {
         </button>
       </form>
 
-      {import.meta.env.DEV && (
-        <div className="demo-panel">
-          <p className="demo-title">{t('auth.demoLogin')}</p>
-          <p className="demo-description">{t('auth.demoDescription')}</p>
-          <div className="demo-buttons">
-            {demoUsers.map((demo) => (
-              <button
-                className="button button--demo"
-                type="button"
-                key={demo.phone}
-                onClick={() => setForm({ phone: demo.phone, password: demo.password })}
-              >
-                {t(demo.labelKey)}
-              </button>
-            ))}
-          </div>
+      {isDevelopment && (
+        <div className="dev-login-entry">
+          <p className="dev-login-entry__title">DEV Panel</p>
+          <p className="dev-login-entry__description">Быстрый поиск и вход под DEMO-пользователями.</p>
+          <p className="dev-login-entry__hint">Поиск по ФИО, ID, клинике и специальности.</p>
+          <button className="button button--secondary" type="button" onClick={() => navigate('/dev')}>Открыть DEV Panel</button>
         </div>
       )}
 

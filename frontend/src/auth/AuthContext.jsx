@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import {
   clearStoredToken,
+  devLogin as devLoginRequest,
   getCurrentUser,
   getStoredToken,
   login as loginRequest,
@@ -49,8 +50,7 @@ export function AuthProvider({ children }) {
     return () => setUnauthorizedHandler(null)
   }, [logout])
 
-  const login = useCallback(async (credentials) => {
-    const response = await loginRequest(credentials)
+  const hydrateAuthResponse = useCallback(async (response) => {
     storeToken(response.accessToken)
     // Always hydrate the session from the backend so role and staff details
     // are never taken from client-controlled state.
@@ -70,9 +70,19 @@ export function AuthProvider({ children }) {
     return currentUser
   }, [])
 
+  const refreshUser = useCallback(async () => {
+    const currentUser = await getCurrentUser()
+    setState((current) => ({ ...current, user: currentUser }))
+    return currentUser
+  }, [])
+
+  const login = useCallback((credentials) => loginRequest(credentials).then(hydrateAuthResponse), [hydrateAuthResponse])
+
+  const loginAsDevUser = useCallback((userId) => devLoginRequest(userId).then(hydrateAuthResponse), [hydrateAuthResponse])
+
   const register = useCallback((credentials) => registerRequest(credentials), [])
 
-  const value = useMemo(() => ({ ...state, login, register, logout }), [state, login, register, logout])
+  const value = useMemo(() => ({ ...state, login, loginAsDevUser, register, logout, refreshUser }), [state, login, loginAsDevUser, register, logout, refreshUser])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

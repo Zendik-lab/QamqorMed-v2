@@ -47,7 +47,7 @@ public class SecurityConfig {
                         .accessDeniedHandler(new JsonAccessDeniedHandler(objectMapper))
                 )
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/api/health", "/api/auth/login", "/api/auth/register").permitAll()
+                        .requestMatchers("/api/health", "/api/auth/login", "/api/auth/register", "/api/dev/**").permitAll()
                         .requestMatchers("/api/patient/**").hasRole("PATIENT")
                         .requestMatchers("/api/doctor/**").hasRole("DOCTOR")
                         .requestMatchers("/api/nurse/**").hasRole("NURSE")

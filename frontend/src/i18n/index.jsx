@@ -62,10 +62,18 @@ export function getLanguageStorageKey() {
   return languageKey
 }
 
-export function localizeSpecialty(name, t) {
+export function localizeSpecialty(specialty, t) {
+  const name = typeof specialty === 'object' ? (specialty.nameRu || specialty.name || '') : specialty
   const value = String(name || '').trim().toLowerCase()
   const key = value.includes('карди') || value.includes('cardio') ? 'cardiology'
     : value.includes('терап') || value.includes('therap') ? 'therapy'
       : value.includes('педиатр') || value.includes('pediatr') ? 'pediatrics' : null
   return key ? t(`medical.specialties.${key}`) : name
+}
+
+export function localizeDirectory(item, language) {
+  if (!item) return ''
+  if (language === 'kk') return item.nameKk || item.nameRu || item.name
+  if (language === 'en') return item.nameEn || item.nameRu || item.name
+  return item.nameRu || item.name
 }

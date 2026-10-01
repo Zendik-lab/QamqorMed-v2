@@ -7,6 +7,9 @@ import com.qamqormed.exception.NotFoundException;
 import com.qamqormed.repository.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 import java.util.List;
 
@@ -16,9 +19,12 @@ public class MedicalStructureService {
     private final CityRepository cities;
     private final ClinicRepository clinics;
     private final SpecialtyRepository specialties;
+    private final ClinicSpecialtyRepository clinicSpecialties;
+    private final DoctorProfileRepository doctors;
 
-    public MedicalStructureService(RegionRepository regions, CityRepository cities, ClinicRepository clinics, SpecialtyRepository specialties) {
-        this.regions = regions; this.cities = cities; this.clinics = clinics; this.specialties = specialties;
+    public MedicalStructureService(RegionRepository regions, CityRepository cities, ClinicRepository clinics, SpecialtyRepository specialties,
+                                   ClinicSpecialtyRepository clinicSpecialties, DoctorProfileRepository doctors) {
+        this.regions = regions; this.cities = cities; this.clinics = clinics; this.specialties = specialties; this.clinicSpecialties = clinicSpecialties; this.doctors = doctors;
     }
 
     @Transactional(readOnly = true)
@@ -67,6 +73,11 @@ public class MedicalStructureService {
     @Transactional(readOnly = true)
     public List<ClinicResponse> publicClinics() { return clinics.findAllPublic().stream().map(ClinicResponse::from).toList(); }
     @Transactional(readOnly = true)
+    public PageResponse<ClinicResponse> publicClinicsPage(int page, int size) {
+        Page<Clinic> result = clinics.findPagePublic(PageRequest.of(Math.max(page, 0), Math.max(size, 1), Sort.by("name").ascending()));
+        return PageResponse.from(result, ClinicResponse::from);
+    }
+    @Transactional(readOnly = true)
     public ClinicResponse publicClinic(Long id) { Clinic clinic = clinic(id); requirePublic(clinic); return ClinicResponse.from(clinic); }
     @Transactional(readOnly = true)
     public List<ClinicResponse> publicClinicsByCity(Long cityId) {
@@ -77,22 +88,44 @@ public class MedicalStructureService {
         requirePublicRegion(regionId); return clinics.findPublicByRegionId(regionId).stream().map(ClinicResponse::from).toList();
     }
     @Transactional(readOnly = true)
+    public List<ClinicResponse> publicClinicsByCityAndSpecialty(Long cityId, Long specialtyId) {
+        City city = city(cityId); requirePublic(city);
+        Specialty specialty = specialty(specialtyId);
+        if (!specialty.isActive()) throw new NotFoundException("Специальность не найдена");
+        return clinics.findPublicByCityIdAndSpecialtyId(cityId, specialtyId).stream().map(ClinicResponse::from).toList();
+    }
+    @Transactional(readOnly = true)
+    public List<SpecialtyResponse> publicSpecialtiesByClinic(Long clinicId) {
+        Clinic clinic = clinic(clinicId); requirePublic(clinic);
+        return clinicSpecialties.findPublicByClinicId(clinicId).stream().map(link -> SpecialtyResponse.from(link.getSpecialty())).toList();
+    }
+    @Transactional(readOnly = true)
     public List<ClinicResponse> adminClinics() { return clinics.findAll().stream().sorted((a, b) -> a.getName().compareToIgnoreCase(b.getName())).map(ClinicResponse::from).toList(); }
+    @Transactional(readOnly = true)
+    public PageResponse<ClinicResponse> adminClinicsPage(int page, int size) {
+        Page<Clinic> result = clinics.findAll(PageRequest.of(Math.max(page, 0), Math.max(size, 1), Sort.by("name").ascending()));
+        return PageResponse.from(result, ClinicResponse::from);
+    }
     @Transactional
     public ClinicResponse createClinic(CreateClinicRequest request) {
-        Clinic clinic = new Clinic(); clinic.setName(request.name().trim()); clinic.setCity(city(request.cityId()));
+        Clinic clinic = new Clinic(); clinic.setName(request.name().trim()); clinic.setCity(city(request.cityId())); clinic.setRegion(clinic.getCity().getRegion()); clinic.setReal(false); clinic.setSource("DEMO");
         applyClinic(clinic, request.address(), request.phone(), request.description()); clinic.setActive(true);
         return ClinicResponse.from(clinics.save(clinic));
     }
     @Transactional
     public ClinicResponse updateClinic(Long id, UpdateClinicRequest request) {
-        Clinic clinic = clinic(id); clinic.setName(request.name().trim()); clinic.setCity(city(request.cityId()));
+        Clinic clinic = clinic(id); clinic.setName(request.name().trim()); clinic.setCity(city(request.cityId())); clinic.setRegion(clinic.getCity().getRegion());
         applyClinic(clinic, request.address(), request.phone(), request.description()); clinic.setActive(request.active());
         return ClinicResponse.from(clinic);
     }
 
     @Transactional(readOnly = true)
     public List<SpecialtyResponse> publicSpecialties() { return specialties.findAllByActiveTrueOrderByNameAsc().stream().map(SpecialtyResponse::from).toList(); }
+    @Transactional(readOnly = true)
+    public List<SpecialtyResponse> publicSpecialtiesByCity(Long cityId) {
+        City city = city(cityId); requirePublic(city);
+        return doctors.findActiveSpecialtiesByCityId(cityId).stream().map(SpecialtyResponse::from).toList();
+    }
     @Transactional(readOnly = true)
     public SpecialtyResponse publicSpecialty(Long id) { Specialty specialty = specialty(id); if (!specialty.isActive()) throw new NotFoundException("Специальность не найдена"); return SpecialtyResponse.from(specialty); }
     @Transactional(readOnly = true)

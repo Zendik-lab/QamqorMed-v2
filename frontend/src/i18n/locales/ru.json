@@ -41,12 +41,6 @@
     "creatingAccount": "Создаём аккаунт…",
     "alreadyAccount": "Уже есть аккаунт?",
     "passwordHint": "Минимум 8 символов, буква и цифра.",
-    "demoLogin": "Тестовый вход",
-    "demoDescription": "Только development, локальные вымышленные аккаунты.",
-    "demoPatient": "Пациент",
-    "demoDoctor": "Врач",
-    "demoNurse": "Медсестра",
-    "demoAdmin": "Администратор",
     "checking": "Проверяем авторизацию…",
     "redirecting": "Перенаправляем на страницу входа…",
     "openingCabinet": "Открываем ваш кабинет…"
@@ -149,7 +143,13 @@
     "allDoctors": "← Все врачи",
     "years": "лет",
     "loadingProfile": "Загружаем профиль врача…",
-    "loadingDirectories": "Загружаем справочники…"
+    "loadingDirectories": "Загружаем справочники…",
+    "demoNotice": "все сотрудники в этом справочнике — DEMO-данные",
+    "demo": "DEMO",
+    "previous": "Назад",
+    "next": "Далее",
+    "assignedNurse": "Закреплённая медсестра",
+    "demoDescription": "Учебный профиль. Этот врач и медсестра не являются сотрудниками указанной медицинской организации."
   },
   "admin": {
     "onlyAdmin": "Только для администратора",
@@ -184,6 +184,10 @@
     "lastName": "Фамилия",
     "password": "Пароль",
     "editHint": "При редактировании данные входа не меняются",
-    "count": "{{count}}"
+    "count": "{{count}}",
+    "searchStaff": "Поиск по ФИО",
+    "doctor": "Врач",
+    "previous": "Назад",
+    "next": "Далее"
   }
 }

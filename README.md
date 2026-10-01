@@ -1,6 +1,6 @@
 # QamqorMed
 
-QamqorMed — учебная медицинская full-stack платформа. Этап 3 добавляет медицинскую структуру Казахстан → регион → город → клиника → специальность → врач, не переходя к расписанию и записи на приём.
+QamqorMed — учебная медицинская full-stack платформа. Текущий этап поддерживает структуру Казахстан → регион → город → медицинская организация → специальность → врач/медсестра, а также семейные профили пациента: один PATIENT-аккаунт может управлять несколькими подопечными и записывать каждого на приём отдельно.
 
 ## Стек и структура
 
@@ -13,10 +13,10 @@ QamqorMed — учебная медицинская full-stack платформ�
 ```text
 backend/src/main/java/com/qamqormed/
 ├── config/       # CORS и Spring Security
-├── controller/   # auth, medical structure и admin API
+├── controller/   # auth, patient/clinical workflow, medical structure и admin API
 ├── data/         # development-only demo users и medical structure
 ├── dto/          # request/response DTO
-├── entity/       # User, Region, City, Clinic, Specialty и staff profiles
+├── entity/       # User, Dependent, Appointment, MedicalRecord, NurseIntake и staff profiles
 ├── exception/    # единый JSON error handling
 ├── repository/   # repositories пользователей, структуры и профилей
 ├── security/     # JWT filter/service/UserDetails
@@ -70,7 +70,9 @@ JWT_SECRET=at-least-32-random-characters-for-local-development
 JWT_EXPIRATION=7200000
 ```
 
-`JWT_SECRET` обязателен и не должен храниться в коде или Git. В production также задайте `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `CORS_ALLOWED_ORIGINS`, `JWT_SECRET` и `JWT_EXPIRATION` явно. Production использует `ddl-auto=validate`; development использует существующий `ddl-auto=update`.
+`JWT_SECRET` обязателен и не должен храниться в коде или Git. В production также задайте `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `CORS_ALLOWED_ORIGINS`, `JWT_SECRET` и `JWT_EXPIRATION` явно. Production использует `ddl-auto=validate`; перед первым запуском примените `backend/src/main/resources/db/medical_structure_postgresql.sql`, затем `backend/src/main/resources/db/family_patient_model_postgresql.sql`. Development использует `ddl-auto=update`.
+
+Для дополнительной загрузки выгруженного официального набора eGov задайте в development путь к JSON-файлу в `QAMQORMED_EGOV_CLINICS_FILE`. Поддерживаются массив строк или объект `{ "data": [] }`; строки со статусом deleted/removed/inactive/архив/удалённый пропускаются. Внешние строки должны содержать `id`, `name` (или `title`/`orgName`) и `cityCode` (или название города). Без этой переменной используется локальный снимок `backend/src/main/resources/data/clinics.json`.
 
 Frontend: `frontend/.env.example` содержит `VITE_API_URL=http://localhost:8080`. Production demo-панель в собранном frontend отсутствует: она создаётся только при `import.meta.env.DEV`.
 
@@ -133,20 +135,36 @@ npm run build
 | NURSE | `+77000000003` | `Nurse123!` |
 | ADMIN | `+77000000004` | `Admin123!` |
 
-На `/login` в development доступна панель «Тестовый вход», которая только заполняет обычную форму. Обхода Spring Security и отдельного `/api/demo-login` нет.
+На `/login` в development доступна компактная ссылка на `/dev`. Старого quick-login блока на странице входа нет: поиск пользователей, просмотр данных для входа и вход под DEMO выполняются в DEV Panel. Обхода Spring Security и отдельного `/api/demo-login` нет.
+
+## QamqorMed Development Panel
+
+При `VITE_APP_ENV=development` доступна отдельная страница `/dev`. Она не смешивается с обычным `/login` и позволяет server-side искать DEMO-врачей, медсестёр, пациентов и администраторов, фильтровать медицинскую иерархию, проверять `doctor_nurse_assignments`, видеть технические ID, телефон и пароль DEMO-пользователя и входить выбранным пользователем.
+
+Dev API зарегистрирован только в Spring profile `dev` (`@Profile("dev")`):
+
+```text
+GET  /api/dev/users/search?role=DOCTOR&query=Ayan&regionId=...&cityId=...&clinicId=...&specialtyId=...&page=0&size=20
+GET  /api/dev/users/{userId}/relation
+POST /api/dev/login/{userId}
+```
+
+Quick login проверяет существование и активность пользователя, а для DOCTOR/NURSE — DEMO-профиль, затем возвращает обычный `AuthResponse` с JWT. В production dev-controller и dev-seed не создаются, а frontend route `/dev` выключен.
 
 ## API examples
 
-## Medical structure (Этап 3)
+## Medical structure
 
 JPA-сущности и таблицы:
 
-- `regions` — `name`, уникальный `code`, `active`, timestamps;
-- `cities` — `region_id -> regions.id`;
-- `clinics` — `city_id -> cities.id`, адрес, телефон, описание;
-- `specialties` — уникальное имя и `active`;
-- `doctor_profiles` — `user_id -> users.id`, `specialty_id`, `clinic_id`, стаж, bio, кабинет;
-- `nurse_profiles` — `user_id -> users.id`, `clinic_id`, `active`.
+- `regions` — `code`, `name_ru/name_kk/name_en`, `type`, `active`;
+- `cities` — `code`, `region_id -> regions.id`, локализованные названия;
+- `clinics` — `city_id -> cities.id`, `region_id`, `source`, `external_source_id`, `is_real`, адрес и `active`;
+- `specialties` — стабильный `code`, локализованные названия и `active`;
+- `clinic_specialties` — связь клиники со специальностью, `demo=true` для учебных связей;
+- `doctor_profiles` — `user_id -> users.id`, `specialty_id`, `clinic_id`, `seed_key`, `demo`, стаж, bio, кабинет;
+- `nurse_profiles` — `user_id -> users.id`, `clinic_id`, `seed_key`, `demo`, `active`;
+- `doctor_nurse_assignments` — уникальные `doctor_id` и `nurse_id`, активная связь 1:1.
 
 Связи используют внешние ключи, а для `cities.region_id`, `clinics.city_id`, `doctor_profiles.clinic_id` и `doctor_profiles.specialty_id` созданы индексы. DTO не возвращают JPA-связи напрямую и не содержат пароль или hash.
 
@@ -158,12 +176,16 @@ GET /api/regions/{id}
 GET /api/regions/{regionId}/cities
 GET /api/cities/{id}
 GET /api/cities/{cityId}/clinics
-GET /api/clinics
+GET /api/clinics/{clinicId}/specialties
+GET /api/clinics?page=0&size=50
+GET /api/clinics/page?page=0&size=50
 GET /api/clinics/{id}
 GET /api/specialties
 GET /api/specialties/{id}
 GET /api/doctors?regionId=...&cityId=...&clinicId=...&specialtyId=...&search=...
+GET /api/doctors/page?regionId=...&cityId=...&clinicId=...&specialtyId=...&search=...&page=0&size=20
 GET /api/doctors/{id}
+GET /api/doctors/{id}/nurse
 ```
 
 Публичные списки показывают только активную иерархию. Admin API защищён `ROLE_ADMIN`:
@@ -175,18 +197,25 @@ GET/POST/PUT /api/admin/clinics
 GET/POST/PUT /api/admin/specialties
 GET/POST/PUT /api/admin/doctors
 GET/POST/PUT /api/admin/nurses
+GET /api/admin/clinics/page?page=0&size=50
+GET /api/admin/doctors/page?regionId=...&cityId=...&clinicId=...&specialtyId=...&search=...&page=0&size=20
+GET /api/admin/nurses/page?regionId=...&cityId=...&clinicId=...&doctorId=...&search=...&page=0&size=20
 ```
 
-`POST /api/admin/doctors` и `POST /api/admin/nurses` транзакционно создают `User` с принудительной ролью `DOCTOR`/`NURSE` и BCrypt-паролем. Обычная регистрация по-прежнему создаёт только `PATIENT`. Изменение `active=false` скрывает запись без удаления и не ломает внешние ключи.
+`GET /api/doctors` и списочные admin-совместимые endpoint'ы возвращают только запрошенную страницу; для метаданных pagination используйте `/page`. `POST /api/admin/doctors` и `POST /api/admin/nurses` транзакционно создают `User` с принудительной ролью `DOCTOR`/`NURSE` и BCrypt-паролем. Обычная регистрация по-прежнему создаёт только `PATIENT`. Изменение `active=false` скрывает запись без удаления и не ломает внешние ключи.
 
 Frontend:
 
 - `/doctors` — каскадные select'ы региона, города, клиники и специальности, поиск по имени и карточки врачей;
-- `/doctors/:id` — профиль врача с клиникой, городом, регионом, стажем и bio;
+- `/doctors/:id` — профиль врача с клиникой, городом, регионом, стажем, bio и закреплённой DEMO-медсестрой;
 - Patient Dashboard содержит «Найти врача»;
-- Admin Dashboard `/admin` содержит CRUD-разделы регионов, городов, клиник, специальностей, врачей и медсестёр с loading/error/success состояниями.
+- Admin Dashboard `/admin` содержит CRUD-разделы регионов, городов, клиник, специальностей, врачей и медсестёр; персонал ищется по ФИО и фильтруется по региону, городу, клинике, специальности/врачу с pagination.
 
-В dev seed добавляются Жамбылская область → Тараз → `QamqorMed Demo Clinic`, специальности `Кардиолог`, `Терапевт`, `Педиатр`, а существующие demo doctor/nurse получают профили. Seed идемпотентен и не запускается в `prod`.
+Dev seed идемпотентно импортирует JSON-справочники: 20 регионов (17 областей + 3 города республиканского значения), 90 городов, 53 специальности и 31 активную официально названную медицинскую организацию из локального snapshot. Для каждой активной реальной организации создаются все 53 связи `Clinic × Specialty`, а также ровно один DEMO-врач и ровно одна отдельная DEMO-медсестра на каждую пару: ожидаемо `31 × 53 = 1643` пары в текущем локальном наборе. Seed запускается только в `dev`, использует стабильные `DEMO_DOCTOR_{clinicId}_{specialtyCode}` / `DEMO_NURSE_{clinicId}_{specialtyCode}` ключи, BCrypt и PostgreSQL-ограничения one-to-one; реальные ФИО сотрудников не импортируются.
+
+Важно: `FULL CLINIC IMPORT NOT COMPLETED`. Доступный без API key локальный файл — это не полный реестр eGov, а официальный-name snapshot из 31 организации. Для полного импорта передайте eGov-совместимый JSON-экспорт через переменную `QAMQORMED_EGOV_CLINICS_FILE`; неактивные/удалённые записи будут пропущены. Проект не выдаёт этот локальный набор за полный реестр и не утверждает, что DEMO-сотрудники работают в реальных организациях.
+
+Источники справочников: [Бюро национальной статистики — административно-территориальные единицы на 1 июля 2026 года](https://stat.gov.kz/ru/industries/social-tatistics/demography/publications/335821/) и [eGov Open Data — «Медицинские организации»](https://data.egov.kz/datasets/view?index=medical_organizations). Внешний eGov-набор требует API key для прямого API-доступа, поэтому локальная разработка использует сохранённый официальный-name snapshot и поддерживает импорт предоставленного JSON.
 
 Быстрая проверка иерархии после входа:
 
@@ -194,7 +223,8 @@ Frontend:
 $regions = Invoke-RestMethod -Method Get -Uri http://localhost:8080/api/regions -Headers @{ Authorization = "Bearer $token" }
 $cities = Invoke-RestMethod -Method Get -Uri "http://localhost:8080/api/regions/$($regions[0].id)/cities" -Headers @{ Authorization = "Bearer $token" }
 $clinics = Invoke-RestMethod -Method Get -Uri "http://localhost:8080/api/cities/$($cities[0].id)/clinics" -Headers @{ Authorization = "Bearer $token" }
-$doctors = Invoke-RestMethod -Method Get -Uri "http://localhost:8080/api/doctors?clinicId=$($clinics[0].id)" -Headers @{ Authorization = "Bearer $token" }
+$page = Invoke-RestMethod -Method Get -Uri "http://localhost:8080/api/doctors/page?clinicId=$($clinics[0].id)&size=20" -Headers @{ Authorization = "Bearer $token" }
+$nurse = Invoke-RestMethod -Method Get -Uri "http://localhost:8080/api/doctors/$($page.content[0].id)/nurse" -Headers @{ Authorization = "Bearer $token" }
 ```
 
 Проверка security: Patient/Doctor/Nurse на `POST /api/admin/clinics` получают `403`; Admin получает `201`. Повторный region code или specialty name даёт `409`, отрицательный/слишком большой стаж — `400`. После деактивации клиники через `PUT /api/admin/clinics/{id}` она и её врачи исчезают из публичных списков.
@@ -262,7 +292,7 @@ git ls-files | Select-String -Pattern '(^|/)(\.env|\.env\.(local|development|pro
 
 Убедитесь, что `.env`, production secrets, database passwords, JWT secret и реальные credentials не попали в Git. Не коммитьте `frontend/dist`, `frontend/node_modules` или `backend/target`.
 
-Расписание, свободные слоты, Appointment, медицинские карты и другие функции следующего этапа здесь не реализуются.
+Свободные слоты и интеграции с внешними системами пока не входят в объём. Запись на выбранную дату/время, семейные профили, медицинская история и nurse intake реализованы внутри текущей модели.
 
 ## Этап 3.5: кабинеты, role routing и языки
 
@@ -306,6 +336,33 @@ frontend/src/i18n/
 - `GET /api/auth/me` сохранён и расширен безопасными `specialty`/`clinic` для staff-профилей;
 - существующие `GET/POST/PUT /api/admin/**` по-прежнему доступны только `ADMIN`;
 - существующие `/api/patient/**`, `/api/doctor/**`, `/api/nurse/**` по-прежнему ограничены соответствующими ролями в `SecurityConfig`.
+
+Семейный patient workflow:
+
+- `GET /api/patient/profile` — профиль владельца аккаунта — `PATIENT`;
+- `PUT /api/patient/profile` — редактирование разрешённых полей профиля — `PATIENT`;
+- `GET /api/patient/dependents` — активные подопечные текущего JWT-пользователя — `PATIENT`;
+- `POST /api/patient/dependents` — создать подопечного без передачи `ownerId` — `PATIENT`;
+- `GET/PUT/DELETE /api/patient/dependents/{id}` — профиль/изменение/soft-delete подопечного с ownership-check — `PATIENT`;
+- `POST /api/patient/appointments` — запись за себя или за `dependentId` — `PATIENT`;
+- `GET/DELETE /api/patient/appointments[/{id}]` — свои записи и отмена только созданных текущим пользователем — `PATIENT`;
+- `GET /api/patient/medical-records` — только собственная история — `PATIENT`;
+- `GET /api/patient/dependents/{id}/medical-records` — история выбранного подопечного — `PATIENT`;
+- `GET /api/doctor/appointments` и `POST /api/doctor/appointments/{id}/medical-record` — приёмы и медицинская запись реального субъекта — `DOCTOR`;
+- `GET /api/nurse/appointments` и `POST /api/nurse/appointments/{id}/intake` — приёмы и показатели реального субъекта — `NURSE`.
+
+Patient location and scoped booking:
+
+- `GET/PUT /api/patient/location` — preferred region/city from the current JWT patient; the backend rejects a city that belongs to another region;
+- `GET /api/locations/regions` and `GET /api/locations/regions/{regionId}/cities` — onboarding/location selectors;
+- `GET /api/specialties/by-city/{cityId}` — only specialties with active doctors in active clinics of the city;
+- `GET /api/clinics/search?cityId=...&specialtyId=...` — only clinics with an active doctor of that specialty;
+- `GET /api/doctors/search?cityId=...&specialtyId=...&clinicId=...&query=...` — paginated database-side doctor search; doctor results are not loaded on booking page before specialty selection;
+- `GET /api/doctors/{doctorId}/time-slots` — persistent available slots, with deterministic demo slots created idempotently for demo doctors when requested;
+- appointment creation validates city, specialty, clinic, doctor ownership of the slot, slot availability, and dependent ownership on the backend;
+- `GET /api/dev/audit` reports missing Doctor/Nurse/Clinic/City links and Nurse/Doctor clinic mismatches in the development profile.
+
+`Appointment.bookedBy` хранит владельца аккаунта, а nullable `Appointment.dependent` — реального пациента. При `dependent = null` субъектом является `bookedBy`; при наличии `dependent` история и отображение врача/медсестры относятся только к этому подопечному. `MedicalRecord` повторяет эти нормальные FK-связи и не использует polymorphic `subjectId`.
 
 Запуск и проверки остаются прежними:
 

@@ -80,6 +80,15 @@ public class AuthService {
         return new AuthResponse(jwtService.generateToken(user), "Bearer", response(user));
     }
 
+    /**
+     * Builds the same authentication response as the regular login flow for a
+     * user that has already been validated by a development-only service.
+     */
+    @Transactional(readOnly = true)
+    public AuthResponse issueTokenForValidatedUser(User user) {
+        return new AuthResponse(jwtService.generateToken(user), "Bearer", response(user));
+    }
+
     @Transactional(readOnly = true)
     public UserResponse currentUser(Long userId) {
         User user = userRepository.findById(userId)

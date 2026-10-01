@@ -6,7 +6,9 @@ import java.time.Instant;
 @Entity
 @Table(name = "doctor_profiles", indexes = {
         @Index(name = "idx_doctor_profiles_clinic_id", columnList = "clinic_id"),
-        @Index(name = "idx_doctor_profiles_specialty_id", columnList = "specialty_id")
+        @Index(name = "idx_doctor_profiles_specialty_id", columnList = "specialty_id"),
+        @Index(name = "idx_doctor_profiles_demo", columnList = "demo"),
+        @Index(name = "idx_doctor_profiles_seed_key", columnList = "seed_key")
 })
 public class DoctorProfile {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
@@ -16,6 +18,8 @@ public class DoctorProfile {
     @Column(nullable = false) private int experienceYears;
     @Column(length = 2000) private String bio;
     @Column(length = 30) private String officeNumber;
+    @Column(name = "seed_key", length = 180, unique = true) private String seedKey;
+    @Column(nullable = false) private boolean demo = false;
     @Column(nullable = false) private boolean active = true;
     @Column(nullable = false, updatable = false) private Instant createdAt;
     @Column(nullable = false) private Instant updatedAt;
@@ -34,6 +38,10 @@ public class DoctorProfile {
     public void setBio(String bio) { this.bio = bio; }
     public String getOfficeNumber() { return officeNumber; }
     public void setOfficeNumber(String officeNumber) { this.officeNumber = officeNumber; }
+    public String getSeedKey() { return seedKey; }
+    public void setSeedKey(String seedKey) { this.seedKey = seedKey; }
+    public boolean isDemo() { return demo; }
+    public void setDemo(boolean demo) { this.demo = demo; }
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
 }

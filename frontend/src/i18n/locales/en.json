@@ -41,12 +41,6 @@
     "creatingAccount": "Creating account…",
     "alreadyAccount": "Already have an account?",
     "passwordHint": "At least 8 characters, including a letter and a number.",
-    "demoLogin": "Test sign-in",
-    "demoDescription": "Development only, local demo accounts.",
-    "demoPatient": "Patient",
-    "demoDoctor": "Doctor",
-    "demoNurse": "Nurse",
-    "demoAdmin": "Administrator",
     "checking": "Checking authorization…",
     "redirecting": "Redirecting to sign-in…",
     "openingCabinet": "Opening your workspace…"
@@ -149,7 +143,13 @@
     "allDoctors": "← All doctors",
     "years": "years",
     "loadingProfile": "Loading doctor profile…",
-    "loadingDirectories": "Loading directories…"
+    "loadingDirectories": "Loading directories…",
+    "demoNotice": "all staff in this directory are DEMO data",
+    "demo": "DEMO",
+    "previous": "Previous",
+    "next": "Next",
+    "assignedNurse": "Assigned nurse",
+    "demoDescription": "Training profile. This doctor and nurse are not employees of the listed medical organization."
   },
   "admin": {
     "onlyAdmin": "Administrator only",
@@ -184,6 +184,10 @@
     "lastName": "Last name",
     "password": "Password",
     "editHint": "Login details are unchanged when editing",
-    "count": "{{count}}"
+    "count": "{{count}}",
+    "searchStaff": "Search by name",
+    "doctor": "Doctor",
+    "previous": "Previous",
+    "next": "Next"
   }
 }

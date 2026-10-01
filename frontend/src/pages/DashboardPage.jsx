@@ -24,7 +24,7 @@ function DashboardPage() {
           <h1>{t(content.title)}</h1>
           <p className="dashboard-welcome">{t('dashboard.welcome', { name: user.firstName })}</p>
           <p className="form-description">{t(content.description)}</p>
-          {user.role === 'PATIENT' && <button className="button button--compact" type="button" onClick={() => navigate('/doctors')}>{t('dashboard.findDoctor')}</button>}
+          {user.role === 'PATIENT' && <button className="button button--compact" type="button" onClick={() => navigate('/patient/appointments')}>{t('dashboard.findDoctor')}</button>}
           {user.role === 'ADMIN' && <button className="button button--compact" type="button" onClick={() => navigate('/admin')}>{t('dashboard.adminManagement')}</button>}
         </div>
         <div className="welcome-avatar" aria-label={fullName}>{initials}</div>
@@ -40,10 +40,14 @@ function DashboardPage() {
 
       {user.role === 'DOCTOR' && <StatsGrid items={['todayAppointments', 'nextPatient', 'dailyPatients']} t={t} />}
       {user.role === 'NURSE' && <StatsGrid items={['todaySchedule', 'clinicPatients', 'attention']} t={t} />}
-      {user.role === 'PATIENT' && <InfoCards t={t} />}
+      {user.role === 'PATIENT' && <PatientInfoCards t={t} city={user.preferredCity?.name} />}
       {user.role === 'ADMIN' && <InfoCards t={t} admin />}
     </section>
   )
+}
+
+function PatientInfoCards({ t, city }) {
+  return <div className="info-grid"><article className="info-card"><span className="info-number">01</span><h2>📍 {city || 'Ваш город'}</h2><p>Основной город для поиска врачей.</p></article><article className="info-card"><span className="info-number">02</span><h2>{t('nav.myAppointments')}</h2><p>Записи для вас и подопечных.</p></article><article className="info-card"><span className="info-number">03</span><h2>{t('nav.medicalRecord')}</h2><p>История обращений и рекомендации.</p></article></div>
 }
 
 function StatsGrid({ items, t }) {

@@ -8,4 +8,5 @@ public interface SpecialtyRepository extends JpaRepository<Specialty, Long> {
     boolean existsByNameIgnoreCase(String name);
     boolean existsByNameIgnoreCaseAndIdNot(String name, Long id);
     java.util.Optional<Specialty> findByNameIgnoreCase(String name);
+    java.util.Optional<Specialty> findByCodeIgnoreCase(String code);
 }

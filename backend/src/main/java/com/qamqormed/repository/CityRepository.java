@@ -13,4 +13,5 @@ public interface CityRepository extends JpaRepository<City, Long> {
     @Query("select c from City c join fetch c.region r where c.region.id = :regionId and c.active = true and r.active = true order by c.name")
     List<City> findPublicByRegionId(Long regionId);
     Optional<City> findByNameIgnoreCaseAndRegionId(String name, Long regionId);
+    Optional<City> findByCodeIgnoreCase(String code);
 }

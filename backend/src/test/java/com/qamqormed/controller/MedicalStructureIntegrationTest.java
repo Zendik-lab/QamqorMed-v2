@@ -18,6 +18,7 @@ import java.util.regex.Pattern;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -35,10 +36,18 @@ class MedicalStructureIntegrationTest {
     @Autowired DoctorProfileRepository doctors;
     @Autowired NurseProfileRepository nurses;
     @Autowired PasswordEncoder encoder;
+    @Autowired NurseIntakeRepository intakes;
+    @Autowired MedicalRecordRepository records;
+    @Autowired AppointmentRepository appointments;
+    @Autowired DependentRepository dependents;
+    @Autowired TimeSlotRepository timeSlots;
 
     @BeforeEach
     void clean() {
-        doctors.deleteAll(); nurses.deleteAll(); clinics.deleteAll(); cities.deleteAll(); specialties.deleteAll(); regions.deleteAll(); users.deleteAll();
+        intakes.deleteAll(); records.deleteAll(); appointments.deleteAll(); dependents.deleteAll();
+        timeSlots.deleteAll(); doctors.deleteAll(); nurses.deleteAll();
+        users.findAll().forEach(user -> { user.setPreferredCity(null); user.setPreferredRegion(null); users.save(user); });
+        clinics.deleteAll(); cities.deleteAll(); specialties.deleteAll(); regions.deleteAll(); users.deleteAll();
     }
 
     @Test
@@ -56,6 +65,31 @@ class MedicalStructureIntegrationTest {
         mockMvc.perform(get("/api/regions/{id}/cities", region.getId()).header("Authorization", "Bearer " + token)).andExpect(status().isOk()).andExpect(jsonPath("$[0].name").value("Тараз"));
         mockMvc.perform(get("/api/cities/{id}/clinics", city.getId()).header("Authorization", "Bearer " + token)).andExpect(status().isOk()).andExpect(jsonPath("$[0].name").value("Demo Clinic"));
         mockMvc.perform(get("/api/doctors").param("specialtyId", specialty.getId().toString()).header("Authorization", "Bearer " + token)).andExpect(status().isOk()).andExpect(jsonPath("$[0].lastName").value("DOCTOR"));
+    }
+
+    @Test
+    void patientLocationAndScopedDoctorSearchUseTheRealHierarchy() throws Exception {
+        User patient = user("+77000000108", Role.PATIENT);
+        Region region = new Region(); region.setName("Жамбылская область"); region.setCode("LOCATION_TEST"); regions.save(region);
+        City city = new City(); city.setName("Тараз"); city.setRegion(region); cities.save(city);
+        Clinic clinic = new Clinic(); clinic.setName("Cardio Clinic"); clinic.setCity(city); clinics.save(clinic);
+        Specialty specialty = new Specialty(); specialty.setName("Кардиолог"); specialties.save(specialty);
+        User doctorUser = user("+77000000109", Role.DOCTOR); DoctorProfile profile = new DoctorProfile(); profile.setUser(doctorUser); profile.setClinic(clinic); profile.setSpecialty(specialty); profile.setExperienceYears(4); doctors.save(profile);
+        String token = login(patient.getPhone());
+
+        mockMvc.perform(put("/api/patient/location").header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON).content("{\"regionId\":" + region.getId() + ",\"cityId\":" + city.getId() + "}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.cityName").value("Тараз"));
+        mockMvc.perform(get("/api/patient/profile").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.preferredCity.name").value("Тараз"));
+        mockMvc.perform(get("/api/specialties/by-city/{cityId}", city.getId()).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[0].name").value("Кардиолог"));
+        mockMvc.perform(get("/api/clinics/search").param("cityId", city.getId().toString()).param("specialtyId", specialty.getId().toString()).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[0].name").value("Cardio Clinic"));
+        mockMvc.perform(get("/api/doctors/search").param("cityId", city.getId().toString()).param("specialtyId", specialty.getId().toString()).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].id").value(profile.getId()));
+        profile.setDemo(true); doctors.save(profile);
+        mockMvc.perform(get("/api/doctors/{id}/time-slots", profile.getId()).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[0].startsAt").exists());
     }
 
     @Test

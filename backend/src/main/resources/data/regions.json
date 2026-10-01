@@ -1,0 +1,22 @@
+[
+  {"code":"KZ-ABA","nameRu":"Абайская область","nameKk":"Абай облысы","nameEn":"Abai Region","type":"REGION"},
+  {"code":"KZ-AKM","nameRu":"Акмолинская область","nameKk":"Ақмола облысы","nameEn":"Akmola Region","type":"REGION"},
+  {"code":"KZ-AKT","nameRu":"Актюбинская область","nameKk":"Ақтөбе облысы","nameEn":"Aktobe Region","type":"REGION"},
+  {"code":"KZ-ALM","nameRu":"Алматинская область","nameKk":"Алматы облысы","nameEn":"Almaty Region","type":"REGION"},
+  {"code":"KZ-ATY","nameRu":"Атырауская область","nameKk":"Атырау облысы","nameEn":"Atyrau Region","type":"REGION"},
+  {"code":"KZ-ZAP","nameRu":"Западно-Казахстанская область","nameKk":"Батыс Қазақстан облысы","nameEn":"West Kazakhstan Region","type":"REGION"},
+  {"code":"KZ-ZHA","nameRu":"Жамбылская область","nameKk":"Жамбыл облысы","nameEn":"Zhambyl Region","type":"REGION"},
+  {"code":"KZ-ZHE","nameRu":"Жетысуская область","nameKk":"Жетісу облысы","nameEn":"Zhetysu Region","type":"REGION"},
+  {"code":"KZ-KAR","nameRu":"Карагандинская область","nameKk":"Қарағанды облысы","nameEn":"Karaganda Region","type":"REGION"},
+  {"code":"KZ-KUS","nameRu":"Костанайская область","nameKk":"Қостанай облысы","nameEn":"Kostanay Region","type":"REGION"},
+  {"code":"KZ-KZY","nameRu":"Кызылординская область","nameKk":"Қызылорда облысы","nameEn":"Kyzylorda Region","type":"REGION"},
+  {"code":"KZ-MAN","nameRu":"Мангистауская область","nameKk":"Маңғыстау облысы","nameEn":"Mangystau Region","type":"REGION"},
+  {"code":"KZ-PAV","nameRu":"Павлодарская область","nameKk":"Павлодар облысы","nameEn":"Pavlodar Region","type":"REGION"},
+  {"code":"KZ-SEV","nameRu":"Северо-Казахстанская область","nameKk":"Солтүстік Қазақстан облысы","nameEn":"North Kazakhstan Region","type":"REGION"},
+  {"code":"KZ-TUR","nameRu":"Туркестанская область","nameKk":"Түркістан облысы","nameEn":"Turkistan Region","type":"REGION"},
+  {"code":"KZ-ULY","nameRu":"Улытауская область","nameKk":"Ұлытау облысы","nameEn":"Ulytau Region","type":"REGION"},
+  {"code":"KZ-EKO","nameRu":"Восточно-Казахстанская область","nameKk":"Шығыс Қазақстан облысы","nameEn":"East Kazakhstan Region","type":"REGION"},
+  {"code":"KZ-71","nameRu":"Астана","nameKk":"Астана","nameEn":"Astana","type":"REPUBLIC_CITY"},
+  {"code":"KZ-75","nameRu":"Алматы","nameKk":"Алматы","nameEn":"Almaty","type":"REPUBLIC_CITY"},
+  {"code":"KZ-79","nameRu":"Шымкент","nameKk":"Шымкент","nameEn":"Shymkent","type":"REPUBLIC_CITY"}
+]

@@ -5,6 +5,10 @@ import com.qamqormed.entity.User;
 import com.qamqormed.repository.UserRepository;
 import com.qamqormed.repository.DoctorProfileRepository;
 import com.qamqormed.repository.NurseProfileRepository;
+import com.qamqormed.repository.AppointmentRepository;
+import com.qamqormed.repository.DependentRepository;
+import com.qamqormed.repository.MedicalRecordRepository;
+import com.qamqormed.repository.NurseIntakeRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,9 +50,21 @@ class AuthSecurityIntegrationTest {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+    @Autowired
+    private NurseIntakeRepository nurseIntakes;
+    @Autowired
+    private MedicalRecordRepository medicalRecords;
+    @Autowired
+    private AppointmentRepository appointments;
+    @Autowired
+    private DependentRepository dependents;
 
     @BeforeEach
     void cleanUsers() {
+        nurseIntakes.deleteAll();
+        medicalRecords.deleteAll();
+        appointments.deleteAll();
+        dependents.deleteAll();
         doctorProfileRepository.deleteAll();
         nurseProfileRepository.deleteAll();
         userRepository.deleteAll();

@@ -10,9 +10,21 @@ import RegisterPage from './pages/RegisterPage.jsx'
 import PlaceholderPage from './pages/PlaceholderPage.jsx'
 import ForbiddenPage from './pages/ForbiddenPage.jsx'
 import NotFoundPage from './pages/NotFoundPage.jsx'
+import DevPanelPage from './pages/DevPanelPage.jsx'
+import {
+  DependentDetailPage,
+  PatientAppointmentsPage,
+  PatientBookingPage,
+  PatientLocationPage,
+  PatientDependentsPage,
+  PatientMedicalHistoryPage,
+  PatientProfilePage,
+} from './pages/PatientPages.jsx'
+import { isDevelopment } from './config/environment.js'
 import { useLocation } from './utils/navigation.js'
 import { I18nProvider } from './i18n/index.jsx'
 import { useTranslation } from './i18n/index.jsx'
+import StaffWorkflowPage from './pages/StaffWorkflowPages.jsx'
 
 function RoleDashboard({ role }) {
   return (
@@ -64,14 +76,38 @@ function AppContent() {
   const { t } = useTranslation()
 
   let page
-  if (location.pathname === '/') {
+  const needsPatientLocation = isAuthenticated && user?.role === 'PATIENT' && !user?.preferredCity && location.pathname !== '/patient/location'
+
+  if (needsPatientLocation) {
+    page = <RolePage role="PATIENT"><PatientLocationPage /></RolePage>
+  } else if (location.pathname === '/') {
     page = isAuthenticated && user?.role ? <Redirect to={pathForRole(user.role)} /> : <Redirect to="/login" />
   } else if (location.pathname === '/login') {
     page = loading ? <p className="route-message">{t('auth.checking')}</p> : isAuthenticated && user?.role ? <Redirect to={pathForRole(user.role)} /> : <LoginPage />
   } else if (location.pathname === '/register') {
     page = <RegisterPage />
+  } else if (isDevelopment && (location.pathname === '/dev' || location.pathname === '/dev/login')) {
+    page = <DevPanelPage />
   } else if (location.pathname === '/patient') {
     page = <RoleDashboard role="PATIENT" />
+  } else if (location.pathname === '/patient/location') {
+    page = <RolePage role="PATIENT"><PatientLocationPage /></RolePage>
+  } else if (location.pathname === '/patient/appointments') {
+    page = <RolePage role="PATIENT"><PatientBookingPage /></RolePage>
+  } else if (location.pathname === '/patient/my-appointments') {
+    page = <RolePage role="PATIENT"><PatientAppointmentsPage /></RolePage>
+  } else if (location.pathname === '/patient/dependents') {
+    page = <RolePage role="PATIENT"><PatientDependentsPage /></RolePage>
+  } else if (location.pathname.startsWith('/patient/dependents/')) {
+    page = <RolePage role="PATIENT"><DependentDetailPage id={location.pathname.split('/')[3]} /></RolePage>
+  } else if (location.pathname === '/patient/medical-record' || location.pathname === '/patient/medical-history') {
+    page = <RolePage role="PATIENT"><PatientMedicalHistoryPage /></RolePage>
+  } else if (location.pathname === '/patient/profile') {
+    page = <RolePage role="PATIENT"><PatientProfilePage /></RolePage>
+  } else if (location.pathname === '/doctor/appointments' || location.pathname === '/doctor/patients' || location.pathname === '/doctor/medical-records') {
+    page = <RolePage role="DOCTOR"><StaffWorkflowPage role="DOCTOR" /></RolePage>
+  } else if (location.pathname === '/nurse/appointments' || location.pathname === '/nurse/today' || location.pathname === '/nurse/vitals') {
+    page = <RolePage role="NURSE"><StaffWorkflowPage role="NURSE" /></RolePage>
   } else if (location.pathname === '/doctor') {
     page = <RoleDashboard role="DOCTOR" />
   } else if (location.pathname === '/nurse') {

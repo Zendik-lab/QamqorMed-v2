@@ -9,5 +9,6 @@ public class SpecialtyController {
     private final MedicalStructureService service;
     public SpecialtyController(MedicalStructureService service) { this.service = service; }
     @GetMapping public List<SpecialtyResponse> list() { return service.publicSpecialties(); }
+    @GetMapping("/by-city/{cityId}") public List<SpecialtyResponse> byCity(@PathVariable Long cityId) { return service.publicSpecialtiesByCity(cityId); }
     @GetMapping("/{id}") public SpecialtyResponse get(@PathVariable Long id) { return service.publicSpecialty(id); }
 }

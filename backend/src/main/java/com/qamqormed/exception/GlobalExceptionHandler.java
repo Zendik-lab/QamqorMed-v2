@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -32,6 +33,11 @@ public class GlobalExceptionHandler {
                 errors.putIfAbsent(error.getField(), error.getDefaultMessage())
         );
         return ResponseEntity.badRequest().body(new ApiError(400, "Validation failed", errors));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiError> handleUnreadableMessage(HttpMessageNotReadableException exception) {
+        return ResponseEntity.badRequest().body(new ApiError(400, "Некорректный формат запроса"));
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
