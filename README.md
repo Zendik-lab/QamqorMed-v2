@@ -70,7 +70,9 @@ JWT_SECRET=at-least-32-random-characters-for-local-development
 JWT_EXPIRATION=7200000
 ```
 
-`JWT_SECRET` обязателен и не должен храниться в коде или Git. В production также задайте `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `CORS_ALLOWED_ORIGINS`, `JWT_SECRET` и `JWT_EXPIRATION` явно. Production использует `ddl-auto=validate`; перед первым запуском примените `backend/src/main/resources/db/medical_structure_postgresql.sql`, затем `backend/src/main/resources/db/family_patient_model_postgresql.sql`. Development использует `ddl-auto=update`.
+`JWT_SECRET` обязателен и не должен храниться в коде или Git. В production также задайте `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `CORS_ALLOWED_ORIGINS`, `JWT_SECRET` и `JWT_EXPIRATION` явно. Production использует `ddl-auto=validate`; перед первым запуском примените миграции в порядке `medical_structure_postgresql.sql`, `family_patient_model_postgresql.sql`, `clinical_workflow_postgresql.sql`, `stage7_postgresql.sql`, `medical_data_postgresql.sql`. Development использует `ddl-auto=update`.
+
+Если при `POST /api/doctor/appointments/{id}/start` появляется `Internal server error`, а в backend-логе есть `SQLState 42703` и `column r1_0.updated_at does not exist`, существующая база отстаёт от модели медицинских данных. Остановите backend, примените [medical_data_postgresql.sql](backend/src/main/resources/db/medical_data_postgresql.sql) к той же базе PostgreSQL, затем запустите backend снова. Эта миграция идемпотентна: она добавляет недостающие поля через `IF NOT EXISTS` и сохраняет записи.
 
 Для дополнительной загрузки выгруженного официального набора eGov задайте в development путь к JSON-файлу в `QAMQORMED_EGOV_CLINICS_FILE`. Поддерживаются массив строк или объект `{ "data": [] }`; строки со статусом deleted/removed/inactive/архив/удалённый пропускаются. Внешние строки должны содержать `id`, `name` (или `title`/`orgName`) и `cityCode` (или название города). Без этой переменной используется локальный снимок `backend/src/main/resources/data/clinics.json`.
 

@@ -13,6 +13,11 @@ import com.qamqormed.repository.MedicalDocumentRepository;
 import com.qamqormed.repository.MedicalVisitRepository;
 import com.qamqormed.repository.ReferralRepository;
 import com.qamqormed.repository.TreatmentRepository;
+import com.qamqormed.repository.VisitDiagnosisRepository;
+import com.qamqormed.repository.PrescriptionRepository;
+import com.qamqormed.repository.MedicationPrescriptionRepository;
+import com.qamqormed.repository.LabResultRepository;
+import com.qamqormed.repository.MedicalCertificateRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -70,12 +75,27 @@ class AuthSecurityIntegrationTest {
     private AppointmentRepository appointments;
     @Autowired
     private DependentRepository dependents;
+    @Autowired
+    private VisitDiagnosisRepository visitDiagnoses;
+    @Autowired
+    private PrescriptionRepository prescriptions;
+    @Autowired
+    private MedicationPrescriptionRepository medicationPrescriptions;
+    @Autowired
+    private LabResultRepository labResults;
+    @Autowired
+    private MedicalCertificateRepository certificates;
 
     @BeforeEach
     void cleanUsers() {
         medicalDocuments.deleteAll();
         referrals.deleteAll();
         treatments.deleteAll();
+        visitDiagnoses.deleteAll();
+        prescriptions.deleteAll();
+        medicationPrescriptions.deleteAll();
+        labResults.deleteAll();
+        certificates.deleteAll();
         medicalVisits.deleteAll();
         nurseIntakes.deleteAll();
         medicalRecords.deleteAll();

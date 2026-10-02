@@ -4,6 +4,7 @@ import com.qamqormed.entity.City;
 import com.qamqormed.entity.Clinic;
 import com.qamqormed.entity.Dependent;
 import com.qamqormed.entity.DoctorProfile;
+import com.qamqormed.entity.Appointment;
 import com.qamqormed.entity.MedicalRecord;
 import com.qamqormed.entity.Region;
 import com.qamqormed.entity.Role;
@@ -17,6 +18,11 @@ import com.qamqormed.repository.MedicalDocumentRepository;
 import com.qamqormed.repository.MedicalVisitRepository;
 import com.qamqormed.repository.ReferralRepository;
 import com.qamqormed.repository.TreatmentRepository;
+import com.qamqormed.repository.VisitDiagnosisRepository;
+import com.qamqormed.repository.PrescriptionRepository;
+import com.qamqormed.repository.MedicationPrescriptionRepository;
+import com.qamqormed.repository.LabResultRepository;
+import com.qamqormed.repository.MedicalCertificateRepository;
 import com.qamqormed.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -57,12 +63,22 @@ class FamilyPatientIntegrationTest {
     @Autowired DoctorProfileRepository doctors;
     @Autowired com.qamqormed.repository.TimeSlotRepository timeSlots;
     @Autowired PasswordEncoder encoder;
+    @Autowired VisitDiagnosisRepository visitDiagnoses;
+    @Autowired PrescriptionRepository prescriptions;
+    @Autowired MedicationPrescriptionRepository medicationPrescriptions;
+    @Autowired LabResultRepository labResults;
+    @Autowired MedicalCertificateRepository certificates;
 
     @BeforeEach
     void clean() {
         documents.deleteAll();
         referrals.deleteAll();
         treatments.deleteAll();
+        visitDiagnoses.deleteAll();
+        prescriptions.deleteAll();
+        medicationPrescriptions.deleteAll();
+        labResults.deleteAll();
+        certificates.deleteAll();
         visits.deleteAll();
         records.deleteAll();
         appointments.deleteAll();
@@ -130,11 +146,39 @@ class FamilyPatientIntegrationTest {
         mockMvc.perform(get("/api/patient/dependents/{id}/medical-records", dependentId).header("Authorization", "Bearer " + parentToken))
                 .andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(1))).andExpect(jsonPath("$[0].diagnosis").value("ОРВИ"));
 
-        mockMvc.perform(post("/api/patient/appointments")
+        String selfAppointmentResponse = mockMvc.perform(post("/api/patient/appointments")
                         .header("Authorization", "Bearer " + parentToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"doctorId\":" + doctor.getId() + ",\"appointmentAt\":\"" + LocalDateTime.now().plusDays(4).withSecond(0).withNano(0) + "\"}"))
-                .andExpect(status().isCreated()).andExpect(jsonPath("$.subject.type").value("SELF"));
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.subject.type").value("SELF"))
+                .andReturn().getResponse().getContentAsString();
+        Long selfAppointmentId = extractId(selfAppointmentResponse);
+        Appointment selfAppointment = appointments.findById(selfAppointmentId).orElseThrow();
+        selfAppointment.setStatus(com.qamqormed.entity.AppointmentStatus.READY);
+        appointments.save(selfAppointment);
+
+        mockMvc.perform(post("/api/doctor/appointments/{id}/start", selfAppointmentId)
+                        .header("Authorization", "Bearer " + doctorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("IN_APPOINTMENT"))
+                .andExpect(jsonPath("$.medicalVisit.subject.type").value("SELF"))
+                .andExpect(jsonPath("$.medicalVisit.subject.id").value(parent.getId()));
+        mockMvc.perform(post("/api/doctor/appointments/{id}/start", selfAppointmentId)
+                        .header("Authorization", "Bearer " + doctorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("IN_APPOINTMENT"))
+                .andExpect(jsonPath("$.medicalVisit.subject.id").value(parent.getId()));
+        org.junit.jupiter.api.Assertions.assertEquals(1, visits.findAll().stream()
+                .filter(value -> selfAppointmentId.equals(value.getAppointment().getId())).count());
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/doctor/appointments/{id}/visit", selfAppointmentId)
+                        .header("Authorization", "Bearer " + doctorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"diagnosis\":\"ОРВИ\"}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/doctor/appointments/{id}/complete", selfAppointmentId)
+                        .header("Authorization", "Bearer " + doctorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("COMPLETED"));
     }
 
     private User user(String phone, String firstName, String lastName, Role role) {

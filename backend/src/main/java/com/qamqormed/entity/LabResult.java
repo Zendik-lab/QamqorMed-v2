@@ -16,13 +16,18 @@ public class LabResult {
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "doctor_profile_id", nullable = false) private DoctorProfile doctor;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "medical_visit_id") private MedicalVisit medicalVisit;
     @Column(nullable = false, length = 300) private String testName;
+    @Column(length = 80) private String testCode;
     private LocalDate testDate;
     @Column(nullable = false, length = 30) private String status;
     @Column(length = 4000) private String result;
     @Column(length = 1000) private String referenceRange;
     @Column(length = 2000) private String comment;
+    private Instant orderedAt;
+    private Instant completedAt;
     @Column(nullable = false, updatable = false) private Instant createdAt;
-    @PrePersist void onCreate() { createdAt = Instant.now(); }
+    @Column(nullable = false) private Instant updatedAt;
+    @PrePersist void onCreate() { createdAt = Instant.now(); updatedAt = createdAt; if (orderedAt == null) orderedAt = createdAt; }
+    @PreUpdate void onUpdate() { updatedAt = Instant.now(); }
     public Long getId() { return id; }
     public PatientProfile getPatientProfile() { return patientProfile; }
     public void setPatientProfile(PatientProfile patientProfile) { this.patientProfile = patientProfile; }
@@ -34,6 +39,8 @@ public class LabResult {
     public void setMedicalVisit(MedicalVisit medicalVisit) { this.medicalVisit = medicalVisit; }
     public String getTestName() { return testName; }
     public void setTestName(String testName) { this.testName = testName; }
+    public String getTestCode() { return testCode; }
+    public void setTestCode(String testCode) { this.testCode = testCode; }
     public LocalDate getTestDate() { return testDate; }
     public void setTestDate(LocalDate testDate) { this.testDate = testDate; }
     public String getStatus() { return status; }
@@ -44,5 +51,10 @@ public class LabResult {
     public void setReferenceRange(String referenceRange) { this.referenceRange = referenceRange; }
     public String getComment() { return comment; }
     public void setComment(String comment) { this.comment = comment; }
+    public Instant getOrderedAt() { return orderedAt; }
+    public void setOrderedAt(Instant orderedAt) { this.orderedAt = orderedAt; }
+    public Instant getCompletedAt() { return completedAt; }
+    public void setCompletedAt(Instant completedAt) { this.completedAt = completedAt; }
     public Instant getCreatedAt() { return createdAt; }
+    public Instant getUpdatedAt() { return updatedAt; }
 }

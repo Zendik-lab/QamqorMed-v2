@@ -11,13 +11,19 @@ public class MedicationPrescription {
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "medical_visit_id", nullable = false) private MedicalVisit medicalVisit;
     @Column(nullable = false, length = 300) private String medicationName;
     @Column(length = 200) private String dosage;
+    @Column(length = 50) private String dosageUnit;
     @Column(length = 200) private String frequency;
+    @Column(length = 100) private String route;
     @Column(length = 100) private String duration;
+    private Integer durationDays;
     @Column(length = 1000) private String instructions;
     private LocalDate startDate;
     private LocalDate endDate;
+    @Column(nullable = false, length = 30) private String status = "ACTIVE";
     @Column(nullable = false, updatable = false) private Instant createdAt;
-    @PrePersist void onCreate() { createdAt = Instant.now(); }
+    @Column(nullable = false) private Instant updatedAt;
+    @PrePersist void onCreate() { createdAt = Instant.now(); updatedAt = createdAt; }
+    @PreUpdate void onUpdate() { updatedAt = Instant.now(); }
     public Long getId() { return id; }
     public MedicalVisit getMedicalVisit() { return medicalVisit; }
     public void setMedicalVisit(MedicalVisit medicalVisit) { this.medicalVisit = medicalVisit; }
@@ -25,15 +31,24 @@ public class MedicationPrescription {
     public void setMedicationName(String medicationName) { this.medicationName = medicationName; }
     public String getDosage() { return dosage; }
     public void setDosage(String dosage) { this.dosage = dosage; }
+    public String getDosageUnit() { return dosageUnit; }
+    public void setDosageUnit(String dosageUnit) { this.dosageUnit = dosageUnit; }
     public String getFrequency() { return frequency; }
     public void setFrequency(String frequency) { this.frequency = frequency; }
+    public String getRoute() { return route; }
+    public void setRoute(String route) { this.route = route; }
     public String getDuration() { return duration; }
     public void setDuration(String duration) { this.duration = duration; }
+    public Integer getDurationDays() { return durationDays; }
+    public void setDurationDays(Integer durationDays) { this.durationDays = durationDays; }
     public String getInstructions() { return instructions; }
     public void setInstructions(String instructions) { this.instructions = instructions; }
     public LocalDate getStartDate() { return startDate; }
     public void setStartDate(LocalDate startDate) { this.startDate = startDate; }
     public LocalDate getEndDate() { return endDate; }
     public void setEndDate(LocalDate endDate) { this.endDate = endDate; }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
     public Instant getCreatedAt() { return createdAt; }
+    public Instant getUpdatedAt() { return updatedAt; }
 }

@@ -3,6 +3,7 @@ package com.qamqormed.service;
 import com.qamqormed.dto.*;
 import com.qamqormed.entity.*;
 import com.qamqormed.exception.BadRequestException;
+import com.qamqormed.exception.ForbiddenException;
 import com.qamqormed.exception.NotFoundException;
 import com.qamqormed.repository.*;
 import org.springframework.stereotype.Service;
@@ -80,7 +81,8 @@ public class ClinicalStructuredService {
         if (blank(request.medicationName())) throw new BadRequestException("Укажите название лекарства");
         MedicationPrescription value = new MedicationPrescription(); value.setMedicalVisit(visit);
         value.setMedicationName(trim(request.medicationName())); value.setDosage(trim(request.dosage()));
-        value.setFrequency(trim(request.frequency())); value.setDuration(trim(request.duration()));
+        value.setDosageUnit(trim(request.dosageUnit())); value.setFrequency(trim(request.frequency())); value.setRoute(trim(request.route()));
+        value.setDuration(trim(request.duration())); value.setDurationDays(request.durationDays());
         value.setInstructions(trim(request.instructions())); value.setStartDate(request.startDate()); value.setEndDate(request.endDate());
         return MedicationPrescriptionResponse.from(medications.save(value));
     }
@@ -112,11 +114,13 @@ public class ClinicalStructuredService {
         result.setPatientProfile(visit.getPatientProfile());
         result.setDependent(visit.getDependent());
         result.setTestName(request.testName().trim());
+        result.setTestCode(trim(request.testCode()));
         result.setTestDate(request.testDate() == null ? java.time.LocalDate.now() : request.testDate());
         result.setStatus(request.status().trim().toUpperCase(java.util.Locale.ROOT));
         result.setResult(trim(request.result()));
         result.setReferenceRange(trim(request.referenceRange()));
         result.setComment(trim(request.comment()));
+        if ("COMPLETED".equals(result.getStatus())) result.setCompletedAt(java.time.Instant.now());
         return LabResultResponse.from(labResults.save(result));
     }
 
@@ -129,28 +133,32 @@ public class ClinicalStructuredService {
         certificate.setPatientProfile(visit.getPatientProfile());
         certificate.setDependent(visit.getDependent());
         certificate.setType(request.type().trim());
+        certificate.setTitle(trim(request.title()));
+        certificate.setValidFrom(request.validFrom());
         certificate.setValidUntil(request.validUntil());
+        certificate.setDocumentNumber(trim(request.documentNumber()));
+        if (request.status() != null && !request.status().isBlank()) certificate.setStatus(request.status().trim().toUpperCase(java.util.Locale.ROOT));
         certificate.setDescription(trim(request.description()));
         return MedicalCertificateResponse.from(certificates.save(certificate));
     }
 
     @Transactional(readOnly = true)
     public List<LabResultResponse> patientLabResults(Long userId, Long subjectId) {
-        if (subjectId == null || subjectId.equals(userId)) {
+        if (selfSubject(userId, subjectId)) {
             return labResults.findAllByPatientProfileIdOrderByTestDateDesc(patients.profileEntity(userId).getId())
                     .stream().map(LabResultResponse::from).toList();
         }
-        patients.dependent(userId, subjectId);
+        ownedDependent(userId, subjectId);
         return labResults.findAllByDependentIdOrderByTestDateDesc(subjectId).stream().map(LabResultResponse::from).toList();
     }
 
     @Transactional(readOnly = true)
     public List<MedicalCertificateResponse> patientCertificates(Long userId, Long subjectId) {
-        if (subjectId == null || subjectId.equals(userId)) {
+        if (selfSubject(userId, subjectId)) {
             return certificates.findAllByPatientProfileIdOrderByIssuedAtDesc(patients.profileEntity(userId).getId())
                     .stream().map(MedicalCertificateResponse::from).toList();
         }
-        patients.dependent(userId, subjectId);
+        ownedDependent(userId, subjectId);
         return certificates.findAllByDependentIdOrderByIssuedAtDesc(subjectId).stream().map(MedicalCertificateResponse::from).toList();
     }
 
@@ -167,9 +175,24 @@ public class ClinicalStructuredService {
 
     private List<MedicalVisit> subjectVisits(Long userId, Long subjectId) {
         patients.patient(userId);
-        if (subjectId == null || subjectId.equals(userId)) return visits.findAllByPatientUserIdAndDependentIsNullOrderByCompletedAtDesc(userId);
-        patients.dependent(userId, subjectId);
+        if (selfSubject(userId, subjectId)) return visits.findAllByPatientUserIdAndDependentIsNullOrderByCompletedAtDesc(userId);
+        ownedDependent(userId, subjectId);
         return visits.findAllByDependentIdOrderByCompletedAtDesc(subjectId);
+    }
+
+    private boolean selfSubject(Long userId, Long subjectId) {
+        if (subjectId == null) return true;
+        if (patients.isOwnedDependentId(userId, subjectId)) return false;
+        if (subjectId.equals(userId)) return true;
+        return patients.isOwnProfileId(userId, subjectId);
+    }
+
+    private void ownedDependent(Long userId, Long subjectId) {
+        try {
+            patients.dependent(userId, subjectId);
+        } catch (com.qamqormed.exception.NotFoundException exception) {
+            throw new ForbiddenException("Нет доступа к медицинской карте этого пациента");
+        }
     }
 
     private String trim(String value) { return blank(value) ? null : value.trim(); }

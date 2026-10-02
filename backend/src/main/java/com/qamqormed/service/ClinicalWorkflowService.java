@@ -3,8 +3,13 @@ package com.qamqormed.service;
 import com.qamqormed.dto.AppointmentDetailsResponse;
 import com.qamqormed.dto.AppointmentResponse;
 import com.qamqormed.dto.AppointmentStatusRequest;
+import com.qamqormed.dto.DoctorPatientDetailResponse;
+import com.qamqormed.dto.DoctorPatientDirectoryResponse;
+import com.qamqormed.dto.DoctorPatientSummaryResponse;
 import com.qamqormed.dto.MedicalDocumentRequest;
 import com.qamqormed.dto.MedicalDocumentResponse;
+import com.qamqormed.dto.LabResultResponse;
+import com.qamqormed.dto.MedicalCertificateResponse;
 import com.qamqormed.dto.MedicalRecordCreateRequest;
 import com.qamqormed.dto.MedicalRecordResponse;
 import com.qamqormed.dto.MedicalVisitResponse;
@@ -37,6 +42,8 @@ import com.qamqormed.repository.ClinicRepository;
 import com.qamqormed.repository.DoctorNurseAssignmentRepository;
 import com.qamqormed.repository.DoctorProfileRepository;
 import com.qamqormed.repository.MedicalDocumentRepository;
+import com.qamqormed.repository.LabResultRepository;
+import com.qamqormed.repository.MedicalCertificateRepository;
 import com.qamqormed.repository.MedicalRecordRepository;
 import com.qamqormed.repository.MedicalVisitRepository;
 import com.qamqormed.repository.NurseIntakeRepository;
@@ -44,17 +51,25 @@ import com.qamqormed.repository.NurseProfileRepository;
 import com.qamqormed.repository.ReferralRepository;
 import com.qamqormed.repository.SpecialtyRepository;
 import com.qamqormed.repository.TreatmentRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 @Service
 public class ClinicalWorkflowService {
+    private static final Logger log = LoggerFactory.getLogger(ClinicalWorkflowService.class);
     private final DoctorProfileRepository doctors;
     private final NurseProfileRepository nurses;
     private final DoctorNurseAssignmentRepository assignments;
@@ -72,6 +87,8 @@ public class ClinicalWorkflowService {
     private final com.qamqormed.repository.PrescriptionRepository structuredPrescriptions;
     private final com.qamqormed.repository.MedicationPrescriptionRepository medicationPrescriptions;
     private final com.qamqormed.repository.ICD10CodeRepository icd10Codes;
+    private final LabResultRepository labResults;
+    private final MedicalCertificateRepository certificates;
 
     public ClinicalWorkflowService(DoctorProfileRepository doctors, NurseProfileRepository nurses,
                                    DoctorNurseAssignmentRepository assignments, AppointmentRepository appointments,
@@ -82,7 +99,8 @@ public class ClinicalWorkflowService {
                                    com.qamqormed.repository.VisitDiagnosisRepository visitDiagnoses,
                                    com.qamqormed.repository.PrescriptionRepository structuredPrescriptions,
                                    com.qamqormed.repository.MedicationPrescriptionRepository medicationPrescriptions,
-                                   com.qamqormed.repository.ICD10CodeRepository icd10Codes) {
+                                   com.qamqormed.repository.ICD10CodeRepository icd10Codes,
+                                   LabResultRepository labResults, MedicalCertificateRepository certificates) {
         this.doctors = doctors;
         this.nurses = nurses;
         this.assignments = assignments;
@@ -100,6 +118,8 @@ public class ClinicalWorkflowService {
         this.structuredPrescriptions = structuredPrescriptions;
         this.medicationPrescriptions = medicationPrescriptions;
         this.icd10Codes = icd10Codes;
+        this.labResults = labResults;
+        this.certificates = certificates;
     }
 
     @Transactional(readOnly = true)
@@ -126,6 +146,81 @@ public class ClinicalWorkflowService {
         return AppointmentResponse.from(doctorAppointmentEntity(userId, appointmentId));
     }
 
+    /**
+     * Builds the doctor's patient catalogue from that doctor's appointments only.
+     * The authenticated user is resolved to a DoctorProfile inside this service;
+     * no doctor id supplied by the client participates in the scope decision.
+     */
+    @Transactional(readOnly = true)
+    public DoctorPatientDirectoryResponse doctorPatientDirectory(Long userId, String query, String status,
+                                                                  LocalDate date, String period, String type, Long clinicId) {
+        DoctorProfile doctor = doctorForUser(userId);
+        AppointmentStatus requestedStatus = parseStatus(status);
+        List<Appointment> scoped = appointments.findAllByDoctorIdOrderByAppointmentAtAsc(doctor.getId()).stream()
+                .filter(appointment -> matchesPatientFilter(appointment, query, requestedStatus, date, period, type, clinicId))
+                .toList();
+        List<AppointmentDetailsResponse> details = scoped.stream().map(this::details).toList();
+        LocalDate today = LocalDate.now();
+        LocalDateTime now = LocalDateTime.now();
+        List<AppointmentDetailsResponse> todayItems = details.stream()
+                .filter(item -> item.appointmentAt().toLocalDate().equals(today))
+                .toList();
+        List<AppointmentDetailsResponse> upcoming = details.stream()
+                .filter(item -> item.appointmentAt().isAfter(now))
+                .toList();
+        List<AppointmentDetailsResponse> history = details.stream()
+                .filter(item -> item.appointmentAt().isBefore(now)
+                        && "COMPLETED".equals(item.status()))
+                .sorted(Comparator.comparing(AppointmentDetailsResponse::appointmentAt).reversed())
+                .toList();
+
+        Map<String, List<Appointment>> bySubject = new LinkedHashMap<>();
+        scoped.forEach(appointment -> bySubject.computeIfAbsent(subjectKey(appointment), ignored -> new ArrayList<>()).add(appointment));
+        List<DoctorPatientSummaryResponse> patients = bySubject.values().stream()
+                .map(this::patientSummary)
+                .sorted(Comparator.comparing(DoctorPatientSummaryResponse::lastAppointmentDate,
+                        Comparator.nullsLast(Comparator.reverseOrder())))
+                .toList();
+        return new DoctorPatientDirectoryResponse(todayItems, upcoming, history, patients);
+    }
+
+    /**
+     * Resolves a patient/dependent only through appointments owned by the current
+     * doctor's profile. A patient without a relationship to this doctor is never
+     * loaded and is returned as the same safe 404 as an unknown patient.
+     */
+    @Transactional(readOnly = true)
+    public DoctorPatientDetailResponse doctorPatientDetail(Long userId, Long patientId, String type) {
+        DoctorProfile doctor = doctorForUser(userId);
+        List<Appointment> scoped = appointments.findAllByDoctorIdOrderByAppointmentAtAsc(doctor.getId()).stream()
+                .filter(appointment -> subjectMatches(appointment, patientId, type))
+                .sorted(Comparator.comparing(Appointment::getAppointmentAt).reversed())
+                .toList();
+        if (scoped.isEmpty()) throw new NotFoundException("Пациент не найден");
+
+        List<AppointmentDetailsResponse> details = scoped.stream().map(this::details).toList();
+        List<com.qamqormed.dto.MedicalVisitResponse> visits = details.stream()
+                .map(AppointmentDetailsResponse::medicalVisit)
+                .filter(Objects::nonNull)
+                .filter(visit -> visit.completedAt() != null)
+                .sorted(Comparator.comparing(com.qamqormed.dto.MedicalVisitResponse::appointmentAt).reversed())
+                .toList();
+        List<LabResultResponse> labResults = visits.stream()
+                .flatMap(visit -> this.labResults.findAllByMedicalVisitIdOrderByTestDateDesc(visit.id()).stream())
+                .map(LabResultResponse::from)
+                .toList();
+        List<MedicalCertificateResponse> certificates = visits.stream()
+                .flatMap(visit -> this.certificates.findAllByMedicalVisitIdOrderByIssuedAtDesc(visit.id()).stream())
+                .map(MedicalCertificateResponse::from)
+                .toList();
+        AppointmentDetailsResponse current = details.stream()
+                .filter(item -> item.appointmentAt().toLocalDate().equals(LocalDate.now()))
+                .filter(item -> !Set.of("COMPLETED", "CANCELLED", "NO_SHOW").contains(item.status()))
+                .min(Comparator.comparing(AppointmentDetailsResponse::appointmentAt))
+                .orElse(null);
+        return new DoctorPatientDetailResponse(patientSummary(scoped), current, details, visits, labResults, certificates);
+    }
+
     @Transactional(readOnly = true)
     public List<MedicalRecordResponse> doctorSubjectHistory(Long userId, Long appointmentId) {
         return subjectHistory(doctorAppointmentEntity(userId, appointmentId));
@@ -133,7 +228,24 @@ public class ClinicalWorkflowService {
 
     @Transactional
     public AppointmentDetailsResponse startDoctorVisit(Long userId, Long appointmentId) {
-        Appointment appointment = doctorAppointmentEntity(userId, appointmentId);
+        DoctorProfile doctor = doctorForUser(userId);
+        Appointment appointment = appointments.findByIdAndDoctorIdForUpdate(appointmentId, doctor.getId())
+                .orElseThrow(() -> new NotFoundException("Запись не найдена"));
+        AppointmentStatus current = canonical(appointment.getStatus());
+        log.info("Starting medical visit: appointmentId={}, doctorId={}, patientUserId={}, patientProfileId={}, dependentId={}, status={}",
+                appointmentId, doctor.getId(), appointment.getBookedBy().getId(),
+                appointment.getPatientProfile() == null ? null : appointment.getPatientProfile().getId(),
+                appointment.getDependent() == null ? null : appointment.getDependent().getId(), current);
+
+        // A retry caused by a double click or a lost response must not create a
+        // second visit. Return the same in-progress visit after making sure its
+        // start timestamp exists.
+        if (current == AppointmentStatus.IN_APPOINTMENT) {
+            MedicalVisit existing = visitFor(appointment, doctor.getUser());
+            if (existing.getStartedAt() == null) existing.setStartedAt(LocalDateTime.now());
+            visits.save(existing);
+            return details(appointment);
+        }
         requireStatus(appointment, AppointmentStatus.READY);
         MedicalVisit visit = visitFor(appointment, appointment.getDoctor().getUser());
         if (visit.getStartedAt() == null) visit.setStartedAt(LocalDateTime.now());
@@ -264,8 +376,11 @@ public class ClinicalWorkflowService {
                 .orElseThrow(() -> new NotFoundException("Специальность направления не найдена")));
         referral.setTargetClinic(request.targetClinicId() == null ? null : clinics.findById(request.targetClinicId())
                 .orElseThrow(() -> new NotFoundException("Клиника направления не найдена")));
+        referral.setTargetDoctor(request.targetDoctorId() == null ? null : doctors.findById(request.targetDoctorId())
+                .orElseThrow(() -> new NotFoundException("Врач направления не найден")));
         referral.setReason(trimToNull(request.reason()));
         referral.setNotes(trimToNull(request.notes()));
+        referral.setValidUntil(request.validUntil());
         referral.setStatus(ReferralStatus.CREATED);
         return ReferralResponse.from(referrals.save(referral));
     }
@@ -286,6 +401,9 @@ public class ClinicalWorkflowService {
         document.setDescription(trimToNull(request.description()));
         document.setFilePath(trimToNull(request.filePath()));
         document.setFileUrl(trimToNull(request.fileUrl()));
+        document.setFileName(trimToNull(request.fileName()));
+        document.setMimeType(trimToNull(request.mimeType()));
+        document.setFileSize(request.fileSize());
         return MedicalDocumentResponse.from(documents.save(document));
     }
 
@@ -310,7 +428,7 @@ public class ClinicalWorkflowService {
 
     @Transactional(readOnly = true)
     public AppointmentDetailsResponse nurseAppointmentDetails(Long userId, Long appointmentId) {
-        return details(nurseAppointmentEntity(userId, appointmentId));
+        return nurseDetails(nurseAppointmentEntity(userId, appointmentId));
     }
 
     @Transactional(readOnly = true)
@@ -376,7 +494,8 @@ public class ClinicalWorkflowService {
     public List<MedicalVisitResponse> patientHistory(Long userId, Long patientId) {
         patients.patient(userId);
         List<MedicalVisit> result;
-        if (Objects.equals(userId, patientId)) {
+        if (patientId == null || (!patients.isOwnedDependentId(userId, patientId)
+                && (Objects.equals(userId, patientId) || patients.isOwnProfileId(userId, patientId)))) {
             result = visits.findAllByPatientUserIdAndDependentIsNullOrderByCompletedAtDesc(userId);
         } else {
             result = visits.findAllByDependentIdOrderByCompletedAtDesc(patients.dependent(userId, patientId).getId());
@@ -401,7 +520,20 @@ public class ClinicalWorkflowService {
         return AppointmentDetailsResponse.from(appointment, assessment, visit);
     }
 
-    private MedicalVisitResponse visitResponse(MedicalVisit visit) {
+    /** Nurses receive the preparation context plus a deliberately reduced clinical view. */
+    private AppointmentDetailsResponse nurseDetails(Appointment appointment) {
+        NurseIntakeResponse assessment = intakes.findByAppointmentId(appointment.getId()).map(NurseIntakeResponse::from).orElse(null);
+        MedicalVisitResponse full = visits.findByAppointmentId(appointment.getId()).map(this::visitResponse).orElse(null);
+        MedicalVisitResponse limited = full == null ? null : new MedicalVisitResponse(
+                full.id(), full.appointmentId(), full.subject(), full.doctor(), full.clinic(), full.appointmentAt(), full.appointmentStatus(),
+                null, null, full.diagnosis(), full.diagnosisCode(), full.diagnosisName(), null, null,
+                full.startedAt(), full.completedAt(), full.createdAt(), full.updatedAt(), List.of(), List.of(), List.of(),
+                full.diagnoses(), List.of(), full.medications());
+        return AppointmentDetailsResponse.from(appointment, assessment, limited);
+    }
+
+    /** Shared DTO mapping used by patient and doctor medical-card read models. */
+    public MedicalVisitResponse visitResponse(MedicalVisit visit) {
         return MedicalVisitResponse.from(visit,
                 treatments.findAllByMedicalVisitIdOrderByCreatedAtAsc(visit.getId()).stream().map(TreatmentResponse::from).toList(),
                 referrals.findAllByMedicalVisitIdOrderByCreatedAtAsc(visit.getId()).stream().map(ReferralResponse::from).toList(),
@@ -491,6 +623,112 @@ public class ClinicalWorkflowService {
                 ? records.findAllByPatientUserIdAndDependentIsNullOrderByCreatedAtDesc(appointment.getBookedBy().getId())
                 : records.findAllByDependentIdOrderByCreatedAtDesc(appointment.getDependent().getId());
         return history.stream().map(MedicalRecordResponse::from).toList();
+    }
+
+    private DoctorPatientSummaryResponse patientSummary(List<Appointment> appointmentsForSubject) {
+        Appointment first = appointmentsForSubject.getFirst();
+        AppointmentResponse summary = AppointmentResponse.from(first);
+        LocalDateTime now = LocalDateTime.now();
+        LocalDate last = appointmentsForSubject.stream()
+                .map(Appointment::getAppointmentAt)
+                .filter(value -> value.isBefore(now))
+                .max(LocalDateTime::compareTo)
+                .map(LocalDateTime::toLocalDate)
+                .orElse(null);
+        LocalDate next = appointmentsForSubject.stream()
+                .map(Appointment::getAppointmentAt)
+                .filter(value -> !value.isBefore(now))
+                .min(LocalDateTime::compareTo)
+                .map(LocalDateTime::toLocalDate)
+                .orElse(null);
+        String lastDiagnosis = appointmentsForSubject.stream()
+                .sorted(Comparator.comparing(Appointment::getAppointmentAt).reversed())
+                .map(item -> visits.findByAppointmentId(item.getId()).map(MedicalVisit::getDiagnosis).orElse(null))
+                .filter(value -> value != null && !value.isBlank())
+                .findFirst()
+                .orElse(null);
+        return new DoctorPatientSummaryResponse(summary.subject(), subjectPhone(first), subjectEmail(first),
+                ownerFullName(first), appointmentsForSubject.size(), last, next, lastDiagnosis);
+    }
+
+    private boolean matchesPatientFilter(Appointment appointment, String query, AppointmentStatus status,
+                                         LocalDate date, String period, String type, Long clinicId) {
+        if (status != null && canonical(status) != canonical(appointment.getStatus())) return false;
+        if (date != null && !date.equals(appointment.getAppointmentAt().toLocalDate())) return false;
+        if (period != null && !period.isBlank() && !matchesPeriod(appointment.getAppointmentAt().toLocalDate(), period)) return false;
+        if (clinicId != null && (appointment.getDoctor().getClinic() == null
+                || !clinicId.equals(appointment.getDoctor().getClinic().getId()))) return false;
+        if (type != null && !type.isBlank()
+                && !type.equalsIgnoreCase(appointment.getDependent() == null ? "SELF" : "DEPENDENT")) return false;
+        if (query == null || query.isBlank()) return true;
+        String normalized = query.trim().toLowerCase(Locale.ROOT);
+        return subjectName(appointment).toLowerCase(Locale.ROOT).contains(normalized)
+                || valueOf(subjectIin(appointment)).contains(normalized);
+    }
+
+    private boolean matchesPeriod(LocalDate appointmentDate, String period) {
+        LocalDate today = LocalDate.now();
+        return switch (period.toUpperCase(Locale.ROOT)) {
+            case "TODAY" -> appointmentDate.equals(today);
+            case "WEEK" -> !appointmentDate.isBefore(today) && appointmentDate.isBefore(today.plusDays(7));
+            case "MONTH" -> !appointmentDate.isBefore(today) && appointmentDate.isBefore(today.plusDays(30));
+            default -> true;
+        };
+    }
+
+    private boolean subjectMatches(Appointment appointment, Long patientId, String type) {
+        boolean dependent = appointment.getDependent() != null;
+        if (type != null && !type.isBlank()
+                && !type.equalsIgnoreCase(dependent ? "DEPENDENT" : "SELF")) return false;
+        if (dependent) return patientId.equals(appointment.getDependent().getId());
+        Long selfId = appointment.getPatientProfile() == null
+                ? appointment.getBookedBy().getId()
+                : appointment.getPatientProfile().getUser().getId();
+        return patientId.equals(selfId);
+    }
+
+    private String subjectKey(Appointment appointment) {
+        return appointment.getDependent() == null
+                ? "SELF:" + (appointment.getPatientProfile() == null
+                ? appointment.getBookedBy().getId() : appointment.getPatientProfile().getUser().getId())
+                : "DEPENDENT:" + appointment.getDependent().getId();
+    }
+
+    private String subjectIin(Appointment appointment) {
+        if (appointment.getDependent() != null) return appointment.getDependent().getIin();
+        if (appointment.getPatientProfile() != null && appointment.getPatientProfile().getIin() != null) {
+            return appointment.getPatientProfile().getIin();
+        }
+        return appointment.getBookedBy().getIin();
+    }
+
+    private String subjectPhone(Appointment appointment) {
+        if (appointment.getDependent() != null && appointment.getDependent().getPhone() != null) {
+            return appointment.getDependent().getPhone();
+        }
+        if (appointment.getPatientProfile() != null && appointment.getPatientProfile().getPhone() != null) {
+            return appointment.getPatientProfile().getPhone();
+        }
+        return appointment.getBookedBy().getPhone();
+    }
+
+    private String subjectEmail(Appointment appointment) { return appointment.getBookedBy().getEmail(); }
+
+    private String ownerFullName(Appointment appointment) {
+        return appointment.getDependent() == null ? null : fullName(appointment.getBookedBy());
+    }
+
+    private AppointmentStatus parseStatus(String value) {
+        if (value == null || value.isBlank()) return null;
+        try { return AppointmentStatus.valueOf(value.toUpperCase(Locale.ROOT)); }
+        catch (IllegalArgumentException ignored) { return null; }
+    }
+
+    private String valueOf(String value) { return value == null ? "" : value.toLowerCase(Locale.ROOT); }
+
+    private String fullName(User user) {
+        return String.join(" ", user.getLastName(), user.getFirstName(), user.getMiddleName() == null ? "" : user.getMiddleName())
+                .trim().replaceAll(" +", " ");
     }
 
     private boolean matches(Appointment appointment, LocalDate date, AppointmentStatus status, String query) {

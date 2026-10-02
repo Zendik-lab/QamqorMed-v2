@@ -42,16 +42,24 @@ class MedicalStructureIntegrationTest {
     @Autowired NurseIntakeRepository intakes;
     @Autowired MedicalRecordRepository records;
     @Autowired MedicalDocumentRepository documents;
+    @Autowired VisitDiagnosisRepository visitDiagnoses;
+    @Autowired PrescriptionRepository prescriptions;
+    @Autowired MedicationPrescriptionRepository medicationPrescriptions;
+    @Autowired LabResultRepository labResults;
+    @Autowired MedicalCertificateRepository certificates;
     @Autowired MedicalVisitRepository visits;
     @Autowired ReferralRepository referrals;
     @Autowired TreatmentRepository treatments;
     @Autowired AppointmentRepository appointments;
     @Autowired DependentRepository dependents;
     @Autowired TimeSlotRepository timeSlots;
+    @Autowired ICD10CodeRepository icd10Codes;
 
     @BeforeEach
     void clean() {
-        documents.deleteAll(); referrals.deleteAll(); treatments.deleteAll(); visits.deleteAll();
+        documents.deleteAll(); referrals.deleteAll(); treatments.deleteAll();
+        visitDiagnoses.deleteAll(); prescriptions.deleteAll(); medicationPrescriptions.deleteAll();
+        labResults.deleteAll(); certificates.deleteAll(); visits.deleteAll();
         intakes.deleteAll(); records.deleteAll(); appointments.deleteAll(); dependents.deleteAll();
         assignments.deleteAll(); timeSlots.deleteAll(); doctors.deleteAll(); nurses.deleteAll();
         users.findAll().forEach(user -> { user.setPreferredCity(null); user.setPreferredRegion(null); users.save(user); });
@@ -131,6 +139,25 @@ class MedicalStructureIntegrationTest {
     }
 
     @Test
+    void patientCannotReadAnotherPatientsMedicalHistory() throws Exception {
+        User patient = user("+77000000114", Role.PATIENT);
+        User anotherPatient = user("+77000000115", Role.PATIENT);
+        String token = login(patient.getPhone());
+
+        mockMvc.perform(get("/api/patient/medical-history")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.subject.id").value(patient.getId()))
+                .andExpect(jsonPath("$.visits", org.hamcrest.Matchers.empty()));
+        mockMvc.perform(get("/api/patients/{id}/medical-history", anotherPatient.getId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/patient/medical-history")
+                        .param("subjectId", anotherPatient.getId().toString())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void completesPatientDependentWorkflowAndReturnsStructuredResult() throws Exception {
         User patient = user("+77000000111", Role.PATIENT);
         User doctorUser = user("+77000000112", Role.DOCTOR);
@@ -171,6 +198,24 @@ class MedicalStructureIntegrationTest {
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/doctor/appointments/{id}/visit", appointment.getId()).header("Authorization", "Bearer " + doctorToken)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"chiefComplaint\":\"Кашель\",\"anamnesis\":\"Третий день\",\"diagnosis\":\"ОРВИ\",\"diagnosisCode\":\"J06.9\",\"recommendations\":\"Покой и питьё\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.diagnosis").value("ОРВИ"));
+        ICD10Code icd10 = icd10Codes.findByCodeIgnoreCase("J06.9").orElseGet(() -> {
+            ICD10Code value = new ICD10Code(); value.setCode("J06.9"); value.setName("Острый ринофарингит"); return icd10Codes.save(value);
+        });
+        mockMvc.perform(post("/api/doctor/appointments/{id}/diagnoses", appointment.getId()).header("Authorization", "Bearer " + doctorToken)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"icd10CodeId\":" + icd10.getId() + ",\"primary\":true,\"notes\":\"Основной диагноз\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.icd10Code.code").value("J06.9"));
+        mockMvc.perform(post("/api/doctor/appointments/{id}/prescription-orders", appointment.getId()).header("Authorization", "Bearer " + doctorToken)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"Режим\",\"description\":\"Покой\",\"instructions\":\"Соблюдать 3 дня\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.title").value("Режим"));
+        mockMvc.perform(post("/api/doctor/appointments/{id}/medications", appointment.getId()).header("Authorization", "Bearer " + doctorToken)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"medicationName\":\"Парацетамол\",\"dosage\":\"500\",\"dosageUnit\":\"мг\",\"frequency\":\"2 раза\",\"durationDays\":3}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.medicationName").value("Парацетамол"));
+        mockMvc.perform(post("/api/doctor/appointments/{id}/lab-results", appointment.getId()).header("Authorization", "Bearer " + doctorToken)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"testName\":\"Общий анализ крови\",\"status\":\"PENDING\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.testName").value("Общий анализ крови"));
+        mockMvc.perform(post("/api/doctor/appointments/{id}/certificates", appointment.getId()).header("Authorization", "Bearer " + doctorToken)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"type\":\"SICK_LEAVE\",\"title\":\"Справка\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.type").value("SICK_LEAVE"));
         mockMvc.perform(post("/api/doctor/appointments/{id}/prescriptions", appointment.getId()).header("Authorization", "Bearer " + doctorToken)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"Парацетамол\",\"dosage\":\"500 мг\",\"frequency\":\"2 раза в день\",\"duration\":\"3 дня\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.name").value("Парацетамол"));
@@ -187,6 +232,25 @@ class MedicalStructureIntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)))
                 .andExpect(jsonPath("$[0].diagnosis").value("ОРВИ"))
                 .andExpect(jsonPath("$[0].treatments[0].name").value("Парацетамол"));
+        mockMvc.perform(get("/api/patient/medical-history").param("subjectId", child.getId().toString())
+                        .header("Authorization", "Bearer " + patientToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.subject.id").value(child.getId()))
+                .andExpect(jsonPath("$.visits", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$.timeline", org.hamcrest.Matchers.not(org.hamcrest.Matchers.empty())));
+        mockMvc.perform(get("/api/patient/diagnoses").param("subjectId", child.getId().toString()).header("Authorization", "Bearer " + patientToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)));
+        mockMvc.perform(get("/api/patient/prescriptions").param("subjectId", child.getId().toString()).header("Authorization", "Bearer " + patientToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)));
+        mockMvc.perform(get("/api/patient/medications").param("subjectId", child.getId().toString()).header("Authorization", "Bearer " + patientToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)));
+        mockMvc.perform(get("/api/patient/lab-results").param("subjectId", child.getId().toString()).header("Authorization", "Bearer " + patientToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)));
+        mockMvc.perform(get("/api/patient/referrals").param("subjectId", child.getId().toString()).header("Authorization", "Bearer " + patientToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)));
+        mockMvc.perform(get("/api/patient/certificates").param("subjectId", child.getId().toString()).header("Authorization", "Bearer " + patientToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)));
+        mockMvc.perform(get("/api/patient/documents").param("subjectId", child.getId().toString()).header("Authorization", "Bearer " + patientToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)));
         mockMvc.perform(get("/api/appointments/{id}/result", appointment.getId()).header("Authorization", "Bearer " + patientToken))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.documents[0].title").value("Заключение врача"));
         mockMvc.perform(get("/api/patients/{id}/medical-history", doctorUser.getId()).header("Authorization", "Bearer " + patientToken))

@@ -11,6 +11,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
@@ -50,6 +51,10 @@ public class Referral {
     @JoinColumn(name = "target_clinic_id")
     private Clinic targetClinic;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "target_doctor_id")
+    private DoctorProfile targetDoctor;
+
     @Column(length = 2000)
     private String reason;
 
@@ -62,9 +67,14 @@ public class Referral {
 
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
+    private Instant issuedAt;
+    private java.time.LocalDate validUntil;
+    @Column(nullable = false) private Instant updatedAt;
 
     @PrePersist
-    void onCreate() { createdAt = Instant.now(); }
+    void onCreate() { createdAt = Instant.now(); issuedAt = createdAt; updatedAt = createdAt; }
+    @PreUpdate
+    void onUpdate() { updatedAt = Instant.now(); }
 
     public Long getId() { return id; }
     public MedicalVisit getMedicalVisit() { return medicalVisit; }
@@ -81,6 +91,8 @@ public class Referral {
     public void setTargetSpecialty(Specialty targetSpecialty) { this.targetSpecialty = targetSpecialty; }
     public Clinic getTargetClinic() { return targetClinic; }
     public void setTargetClinic(Clinic targetClinic) { this.targetClinic = targetClinic; }
+    public DoctorProfile getTargetDoctor() { return targetDoctor; }
+    public void setTargetDoctor(DoctorProfile targetDoctor) { this.targetDoctor = targetDoctor; }
     public String getReason() { return reason; }
     public void setReason(String reason) { this.reason = reason; }
     public String getNotes() { return notes; }
@@ -88,4 +100,9 @@ public class Referral {
     public ReferralStatus getStatus() { return status; }
     public void setStatus(ReferralStatus status) { this.status = status; }
     public Instant getCreatedAt() { return createdAt; }
+    public Instant getIssuedAt() { return issuedAt; }
+    public void setIssuedAt(Instant issuedAt) { this.issuedAt = issuedAt; }
+    public java.time.LocalDate getValidUntil() { return validUntil; }
+    public void setValidUntil(java.time.LocalDate validUntil) { this.validUntil = validUntil; }
+    public Instant getUpdatedAt() { return updatedAt; }
 }

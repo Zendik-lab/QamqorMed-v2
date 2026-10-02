@@ -4,21 +4,18 @@ import { useTranslation } from '../i18n/index.jsx'
 import { navigate, useLocation } from '../utils/navigation.js'
 import { isDevelopment } from '../config/environment.js'
 import DevToolbar from '../components/DevToolbar.jsx'
+import AdminSidebar, { adminMenuItems } from '../components/AdminSidebar.jsx'
 
 const menus = {
   PATIENT: [
-    ['dashboard', '/patient', '⌂'], ['bookAppointment', '/doctors', '＋'], ['myAppointments', '/patient/my-appointments', '◷'],
-    ['dependents', '/patient/dependents', '♧'], ['medicalRecord', '/patient/medical-record', '▤'], ['diagnoses', '/patient/diagnoses', '◇'], ['prescriptions', '/patient/prescriptions', '⌁'], ['medications', '/patient/medications', '＋'], ['labResults', '/patient/lab-results', '▥'], ['certificates', '/patient/certificates', '▤'], ['documents', '/patient/documents', '□'], ['profile', '/patient/profile', '◉'],
+    ['dashboard', '/patient', '⌂'], ['bookAppointment', '/patient/appointments', '＋'], ['myAppointments', '/patient/my-appointments', '◷'],
+    ['medicalRecord', '/patient/medical-record', '▤'], ['dependents', '/patient/dependents', '♧'], ['profile', '/patient/profile', '◉'],
   ],
   DOCTOR: [
     ['dashboard', '/doctor', '⌂'], ['today', '/doctor/today', '◷'], ['schedule', '/doctor/schedule', '▦'], ['appointments', '/doctor/appointments', '＋'], ['patients', '/doctor/patients', '♧'], ['profile', '/doctor/profile', '◉'],
   ],
   NURSE: [
     ['dashboard', '/nurse', '⌂'], ['todayPatients', '/nurse/today', '♧'], ['schedule', '/nurse/schedule', '▦'], ['appointments', '/nurse/appointments', '＋'], ['profile', '/nurse/profile', '◉'],
-  ],
-  ADMIN: [
-    ['dashboard', '/admin', '⌂'], ['regions', '/admin/regions', '⌖'], ['cities', '/admin/cities', '▦'], ['clinics', '/admin/clinics', '＋'],
-    ['specialties', '/admin/specialties', '✦'], ['doctors', '/admin/doctors', '♧'], ['nurses', '/admin/nurses', '♧'], ['users', '/admin/users', '◉'], ['schedule', '/admin/schedule', '◷'],
   ],
 }
 
@@ -41,25 +38,32 @@ function AppLayout({ children }) {
     )
   }
 
-  const menu = menus[user.role] || []
+  const menu = user.role === 'ADMIN' ? adminMenuItems : menus[user.role] || []
   const basePath = user.role === 'ADMIN' ? '/admin' : `/${user.role.toLowerCase()}`
   const isActive = (path) => path === basePath ? location.pathname === path : location.pathname === path || location.pathname.startsWith(`${path}/`)
+  const activeMenu = menu.find(([, path]) => isActive(path))
+    || (user.role === 'PATIENT' && ['/patient/diagnoses', '/patient/prescriptions', '/patient/medications', '/patient/lab-results', '/patient/referrals', '/patient/certificates', '/patient/documents', '/patient/medical-history'].some((path) => location.pathname === path) ? menu.find(([key]) => key === 'medicalRecord') : null)
 
   return (
     <div className="dashboard-layout">
       {sidebarOpen && <button className="sidebar-backdrop" aria-label={t('common.close')} type="button" onClick={() => setSidebarOpen(false)} />}
-      <aside className={`dashboard-sidebar ${sidebarOpen ? 'dashboard-sidebar--open' : ''}`}>
-        <div className="sidebar-brand"><Brand /></div>
-        <div className="sidebar-role"><span>QamqorMed</span><strong>{t(`roles.${user.role}`)}</strong></div>
-        <nav className="sidebar-nav" aria-label={t('common.home')}>
-          {menu.map(([key, path, icon]) => <button className={`sidebar-link ${isActive(path) ? 'sidebar-link--active' : ''}`} type="button" key={path} onClick={() => { navigate(path); setSidebarOpen(false) }}><span className="sidebar-link__icon" aria-hidden="true">{icon}</span><span>{t(`nav.${key}`)}</span></button>)}
-        </nav>
-        <div className="sidebar-footer"><button className="sidebar-link sidebar-link--logout" type="button" onClick={() => logout()}><span className="sidebar-link__icon" aria-hidden="true">↪</span><span>{t('common.logout')}</span></button></div>
-      </aside>
+      {user.role === 'ADMIN' ? <AdminSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} /> : (
+        <aside className={`dashboard-sidebar ${sidebarOpen ? 'dashboard-sidebar--open' : ''}`}>
+          <div className="sidebar-brand"><Brand /></div>
+          <div className="sidebar-role"><span>QamqorMed</span><strong>{t(`roles.${user.role}`)}</strong></div>
+          <nav className="sidebar-nav" aria-label={t('common.home')}>
+            {menu.map(([key, path, icon]) => {
+              const active = isActive(path)
+              return <button className={`sidebar-link ${active ? 'sidebar-link--active' : ''}`} aria-current={active ? 'page' : undefined} type="button" key={path} onClick={() => { navigate(path); setSidebarOpen(false) }}><span className="sidebar-link__icon" aria-hidden="true">{icon}</span><span>{t(`nav.${key}`)}</span></button>
+            })}
+          </nav>
+          <div className="sidebar-footer"><button className="sidebar-link sidebar-link--logout" type="button" onClick={() => logout()}><span className="sidebar-link__icon" aria-hidden="true">↪</span><span>{t('common.logout')}</span></button></div>
+        </aside>
+      )}
       <div className="dashboard-main">
         <header className="dashboard-header">
           <button className="sidebar-toggle" type="button" aria-label={t('common.home')} onClick={() => setSidebarOpen(true)}>☰</button>
-          <div className="header-context"><span>{t(`roles.${user.role}`)}</span><strong>{t('nav.dashboard')}</strong></div>
+          <div className="header-context"><span>{t(`roles.${user.role}`)}</span><strong>{t(`nav.${activeMenu?.[0] || 'dashboard'}`)}</strong></div>
           <div className="header-actions">
             {user.role === 'PATIENT' && user.preferredCity && <button className="location-chip" type="button" onClick={() => navigate('/patient/location')} title="Изменить основной город">📍 {user.preferredCity.name}</button>}
             <LanguageSwitcher language={language} languages={languages} changeLanguage={changeLanguage} t={t} compact />

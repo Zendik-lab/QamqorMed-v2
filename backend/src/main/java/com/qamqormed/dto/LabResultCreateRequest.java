@@ -5,6 +5,7 @@ import java.time.LocalDate;
 
 public record LabResultCreateRequest(
         @NotBlank String testName,
+        String testCode,
         LocalDate testDate,
         @NotBlank String status,
         String result,

@@ -132,6 +132,24 @@ public class PatientService {
                 .orElseThrow(() -> new NotFoundException("Подопечный не найден"));
     }
 
+    /** Compatibility helper for clients that still send patient_profiles.id. */
+    @Transactional(readOnly = true)
+    public boolean isOwnProfileId(Long userId, Long subjectId) {
+        return subjectId != null && profileEntity(userId).getId().equals(subjectId);
+    }
+
+    @Transactional(readOnly = true)
+    public boolean isOwnedDependentId(Long userId, Long subjectId) {
+        return subjectId != null && dependents.findByIdAndOwnerIdAndActiveTrue(subjectId, userId).isPresent();
+    }
+
+    @Transactional(readOnly = true)
+    public boolean isPatientUserId(Long userId) {
+        return userId != null && users.findById(userId)
+                .map(user -> user.isEnabled() && user.getRole() == com.qamqormed.entity.Role.PATIENT)
+                .orElse(false);
+    }
+
     @Transactional(readOnly = true)
     public DependentResponse getDependent(Long userId, Long dependentId) { return DependentResponse.from(dependent(userId, dependentId)); }
 

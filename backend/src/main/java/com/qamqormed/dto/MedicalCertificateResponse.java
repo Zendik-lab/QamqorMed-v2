@@ -4,11 +4,11 @@ import com.qamqormed.entity.MedicalCertificate;
 import java.time.Instant;
 import java.time.LocalDate;
 
-public record MedicalCertificateResponse(Long id, String type, Instant issuedAt, LocalDate validUntil,
-                                         String description, Long visitId, String doctorName) {
+public record MedicalCertificateResponse(Long id, String type, String title, Instant issuedAt, LocalDate validFrom, LocalDate validUntil,
+                                         String documentNumber, String status, String description, Long visitId, String doctorName) {
     public static MedicalCertificateResponse from(MedicalCertificate item) {
         var doctor = item.getDoctor().getUser();
-        return new MedicalCertificateResponse(item.getId(), item.getType(), item.getIssuedAt(), item.getValidUntil(),
-                item.getDescription(), item.getMedicalVisit().getId(), doctor.getLastName() + " " + doctor.getFirstName());
+        return new MedicalCertificateResponse(item.getId(), item.getType(), item.getTitle(), item.getIssuedAt(), item.getValidFrom(), item.getValidUntil(),
+                item.getDocumentNumber(), item.getStatus(), item.getDescription(), item.getMedicalVisit().getId(), doctor.getLastName() + " " + doctor.getFirstName());
     }
 }

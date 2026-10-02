@@ -7,4 +7,5 @@ import java.util.List;
 public interface MedicalCertificateRepository extends JpaRepository<MedicalCertificate, Long> {
     List<MedicalCertificate> findAllByPatientProfileIdOrderByIssuedAtDesc(Long patientProfileId);
     List<MedicalCertificate> findAllByDependentIdOrderByIssuedAtDesc(Long dependentId);
+    List<MedicalCertificate> findAllByMedicalVisitIdOrderByIssuedAtDesc(Long medicalVisitId);
 }

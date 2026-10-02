@@ -11,6 +11,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
@@ -54,11 +55,23 @@ public class MedicalDocument {
     @Column(length = 1000)
     private String fileUrl;
 
+    @Column(length = 300)
+    private String fileName;
+
+    @Column(length = 120)
+    private String mimeType;
+
+    private Long fileSize;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
+    @Column(nullable = false)
+    private Instant updatedAt;
 
     @PrePersist
-    void onCreate() { createdAt = Instant.now(); }
+    void onCreate() { createdAt = Instant.now(); updatedAt = createdAt; }
+    @PreUpdate
+    void onUpdate() { updatedAt = Instant.now(); }
 
     public Long getId() { return id; }
     public MedicalVisit getMedicalVisit() { return medicalVisit; }
@@ -79,5 +92,12 @@ public class MedicalDocument {
     public void setFilePath(String filePath) { this.filePath = filePath; }
     public String getFileUrl() { return fileUrl; }
     public void setFileUrl(String fileUrl) { this.fileUrl = fileUrl; }
+    public String getFileName() { return fileName; }
+    public void setFileName(String fileName) { this.fileName = fileName; }
+    public String getMimeType() { return mimeType; }
+    public void setMimeType(String mimeType) { this.mimeType = mimeType; }
+    public Long getFileSize() { return fileSize; }
+    public void setFileSize(Long fileSize) { this.fileSize = fileSize; }
     public Instant getCreatedAt() { return createdAt; }
+    public Instant getUpdatedAt() { return updatedAt; }
 }

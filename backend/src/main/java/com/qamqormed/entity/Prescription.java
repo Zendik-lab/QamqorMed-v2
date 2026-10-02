@@ -14,8 +14,11 @@ public class Prescription {
     @Column(length = 2000) private String instructions;
     private LocalDate startDate;
     private LocalDate endDate;
+    @Column(nullable = false, length = 30) private String status = "ACTIVE";
     @Column(nullable = false, updatable = false) private Instant createdAt;
-    @PrePersist void onCreate() { createdAt = Instant.now(); }
+    @Column(nullable = false) private Instant updatedAt;
+    @PrePersist void onCreate() { createdAt = Instant.now(); updatedAt = createdAt; }
+    @PreUpdate void onUpdate() { updatedAt = Instant.now(); }
     public Long getId() { return id; }
     public MedicalVisit getMedicalVisit() { return medicalVisit; }
     public void setMedicalVisit(MedicalVisit medicalVisit) { this.medicalVisit = medicalVisit; }
@@ -29,5 +32,8 @@ public class Prescription {
     public void setStartDate(LocalDate startDate) { this.startDate = startDate; }
     public LocalDate getEndDate() { return endDate; }
     public void setEndDate(LocalDate endDate) { this.endDate = endDate; }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
     public Instant getCreatedAt() { return createdAt; }
+    public Instant getUpdatedAt() { return updatedAt; }
 }

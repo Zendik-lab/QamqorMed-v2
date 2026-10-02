@@ -7,6 +7,9 @@ public record MedicalDocumentRequest(
         String title,
         String description,
         String filePath,
-        String fileUrl
+        String fileUrl,
+        String fileName,
+        String mimeType,
+        Long fileSize
 ) {
 }
