@@ -65,7 +65,7 @@ function AppLayout({ children }) {
           <button className="sidebar-toggle" type="button" aria-label={t('common.home')} onClick={() => setSidebarOpen(true)}>☰</button>
           <div className="header-context"><span>{t(`roles.${user.role}`)}</span><strong>{t(`nav.${activeMenu?.[0] || 'dashboard'}`)}</strong></div>
           <div className="header-actions">
-            {user.role === 'PATIENT' && user.preferredCity && <button className="location-chip" type="button" onClick={() => navigate('/patient/location')} title="Изменить основной город">📍 {user.preferredCity.name}</button>}
+            {user.role === 'PATIENT' && user.preferredCity && <button className="location-chip" type="button" onClick={() => navigate('/patient/location')} title={t('patient.changeCity')}>📍 {user.preferredCity.name}</button>}
             <LanguageSwitcher language={language} languages={languages} changeLanguage={changeLanguage} t={t} compact />
             <button className="profile-chip" type="button" onClick={() => navigate(`${basePath}/profile`)}><span className="profile-chip__avatar">{user.firstName?.[0]}{user.lastName?.[0]}</span><span className="profile-chip__name">{user.firstName} {user.lastName}</span></button>
             <button className="header-logout" type="button" onClick={() => logout()}>{t('common.logout')}</button>

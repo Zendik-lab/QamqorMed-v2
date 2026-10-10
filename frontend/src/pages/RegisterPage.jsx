@@ -1,9 +1,8 @@
 import { useState } from 'react'
-import { ApiError } from '../api/apiClient.js'
 import { useAuth } from '../auth/AuthContext.jsx'
 import { navigate } from '../utils/navigation.js'
 import { normalizePhone } from '../utils/phone.js'
-import { useTranslation } from '../i18n/index.jsx'
+import { translateError, useTranslation } from '../i18n/index.jsx'
 
 const initialForm = { firstName: '', lastName: '', phone: '', password: '', confirmPassword: '' }
 
@@ -30,13 +29,10 @@ function RegisterPage() {
       await register({ ...form, phone: normalizePhone(form.phone) })
       navigate('/login?registered=1')
     } catch (requestError) {
-      if (requestError instanceof ApiError) {
-        setError(requestError.message)
-        setFieldErrors(requestError.errors || {})
-      } else {
-        setError(requestError.message || t('common.error'))
-        setFieldErrors({ phone: requestError.message || t('common.error') })
-      }
+      const message = translateError(requestError, t)
+      setError(message)
+      const fieldErrors = Object.fromEntries(Object.entries(requestError?.errors || {}).map(([field, value]) => [field, translateError({ message: String(value), status: requestError?.status }, t, 'errors.validation')]))
+      setFieldErrors(Object.keys(fieldErrors).length ? fieldErrors : { phone: message })
     } finally {
       setSubmitting(false)
     }

@@ -1,11 +1,10 @@
 import { useState } from 'react'
-import { ApiError } from '../api/apiClient.js'
 import { useAuth } from '../auth/AuthContext.jsx'
 import { navigate, useLocation } from '../utils/navigation.js'
 import { normalizePhone } from '../utils/phone.js'
 import { pathForRole } from '../components/RouteGuards.jsx'
 import { isDevelopment } from '../config/environment.js'
-import { useTranslation } from '../i18n/index.jsx'
+import { translateError, useTranslation } from '../i18n/index.jsx'
 
 function LoginPage() {
   const { login } = useAuth()
@@ -29,7 +28,7 @@ function LoginPage() {
       const user = await login({ ...form, phone: normalizePhone(form.phone) })
       navigate(pathForRole(user.role), { replace: true })
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : requestError.message || t('common.error'))
+      setError(translateError(requestError, t))
     } finally {
       setSubmitting(false)
     }
@@ -72,9 +71,9 @@ function LoginPage() {
       {isDevelopment && (
         <div className="dev-login-entry">
           <p className="dev-login-entry__title">DEV Panel</p>
-          <p className="dev-login-entry__description">Быстрый поиск и вход под DEMO-пользователями.</p>
-          <p className="dev-login-entry__hint">Поиск по ФИО, ID, клинике и специальности.</p>
-          <button className="button button--secondary" type="button" onClick={() => navigate('/dev')}>Открыть DEV Panel</button>
+          <p className="dev-login-entry__description">{t('dev.description')}</p>
+          <p className="dev-login-entry__hint">{t('dev.search')}</p>
+          <button className="button button--secondary" type="button" onClick={() => navigate('/dev')}>{t('dev.title')}</button>
         </div>
       )}
 

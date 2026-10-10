@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ApiError, getDoctorCalendar, getDoctorProfile, getNurseCalendar, getNurseProfile, updateDoctorProfile, updateNurseProfile } from '../api/apiClient.js'
-import { localizeSpecialty, useTranslation } from '../i18n/index.jsx'
+import { getDoctorCalendar, getDoctorProfile, getNurseCalendar, getNurseProfile, updateDoctorProfile, updateNurseProfile } from '../api/apiClient.js'
+import { localizeSpecialty, translateError, useTranslation } from '../i18n/index.jsx'
 import { navigate } from '../utils/navigation.js'
 
 const emptyDoctorForm = { avatarUrl: '', about: '', education: '', qualificationCategory: '', cabinetNumber: '', consultationDurationMinutes: 30 }
@@ -70,7 +70,7 @@ function Field({ label, value, onChange, type = 'text', min, max, placeholder })
 function TextArea({ label, value, onChange }) { return <label className="field-group"><span className="field-label">{label}</span><textarea rows="4" value={value ?? ''} onChange={onChange} /></label> }
 function setFormValue(setForm, name) { return (event) => setForm((current) => ({ ...current, [name]: event.target.value })) }
 function StaffLoading({ error, retry, t }) { return <section className="page-shell"><div className="staff-loading"><span className="loading-dot" /><p>{error || t('common.loading')}</p>{error && <button className="button button--secondary button--compact" type="button" onClick={retry}>{t('staff.retry')}</button>}</div></section> }
-function messageFor(error, t) { return error instanceof ApiError ? error.message : error?.message || t('staff.loadError') }
+function messageFor(error, t) { return translateError(error, t, 'staff.loadError') }
 function todayKey() { const date = new Date(); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` }
 function shiftForDay(calendar, date) { if (!calendar?.schedule) return ''; const day = dayOfWeek(date); const exception = calendar.exceptions?.find((item) => item.date === date); if (exception && exception.type !== 'CUSTOM_WORKING_HOURS') return ''; const intervals = exception?.type === 'CUSTOM_WORKING_HOURS' ? [exception] : calendar.schedule.intervals.filter((item) => item.dayOfWeek === day && !item.breakInterval); return intervals.map((item) => `${item.startTime}–${item.endTime}`).join(', ') }
 function dayOfWeek(value) { return ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'][new Date(`${value}T12:00:00`).getDay()] }

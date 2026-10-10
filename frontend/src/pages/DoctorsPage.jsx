@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { ApiError, getClinicSpecialties, getCityClinics, getDoctorsPage, getRegionCities, getRegions, getSpecialties } from '../api/apiClient.js'
+import { getClinicSpecialties, getCityClinics, getDoctorsPage, getRegionCities, getRegions, getSpecialties } from '../api/apiClient.js'
 import { navigate } from '../utils/navigation.js'
-import { localizeDirectory, localizeSpecialty, useTranslation } from '../i18n/index.jsx'
+import { localizeDirectory, localizeSpecialty, translateError, useTranslation } from '../i18n/index.jsx'
 
 const PAGE_SIZE = 20
 
@@ -22,7 +22,7 @@ function DoctorsPage() {
   useEffect(() => {
     Promise.all([getRegions(), getSpecialties()])
       .then(([regionData, specialtyData]) => { setRegions(regionData); setAllSpecialties(specialtyData); setSpecialties(specialtyData) })
-      .catch((requestError) => setError(requestError instanceof ApiError ? requestError.message : t('common.error')))
+      .catch((requestError) => setError(translateError(requestError, t)))
       .finally(() => setLoading(false))
   }, [t])
 
@@ -45,7 +45,7 @@ function DoctorsPage() {
     setDoctorsLoading(true)
     getDoctorsPage({ ...filters, page: pageInfo.page, size: PAGE_SIZE })
       .then((result) => { setDoctors(result.content || []); setPageInfo({ page: result.page, totalPages: result.totalPages, totalElements: result.totalElements }) })
-      .catch((requestError) => setError(requestError instanceof ApiError ? requestError.message : t('common.error')))
+      .catch((requestError) => setError(translateError(requestError, t)))
       .finally(() => setDoctorsLoading(false))
   }, [filters.regionId, filters.cityId, filters.clinicId, filters.specialtyId, filters.search, pageInfo.page, t])
 

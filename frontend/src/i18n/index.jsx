@@ -1,40 +1,21 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
-import ru from './locales/ru.json'
-import kk from './locales/kk.json'
-import en from './locales/en.json'
+import { createTranslator, defaultLanguage, languageKey, languages, localeFor, normalizeLanguage, resources, translateError } from './core.js'
 
-export const languages = [
-  { code: 'ru', label: 'Русский', shortLabel: 'RU' },
-  { code: 'kk', label: 'Қазақша', shortLabel: 'KZ' },
-  { code: 'en', label: 'English', shortLabel: 'EN' },
-]
-
-const resources = { ru, kk, en }
-const languageKey = 'qamqormed.language'
+export { createTranslator, languageKey, languages, localeFor, normalizeLanguage, resources, translateError }
 const I18nContext = createContext(null)
 
 function initialLanguage() {
   const saved = window.localStorage.getItem(languageKey)
-  return resources[saved] ? saved : 'ru'
+  return normalizeLanguage(saved || defaultLanguage)
 }
-
-function readPath(source, path) {
-  return path.split('.').reduce((value, part) => value?.[part], source)
-}
-
-function interpolate(value, variables) {
-  return value.replace(/{{(.*?)}}/g, (_, key) => String(variables?.[key.trim()] ?? ''))
-}
-
-const missingLabel = '—'
 
 export function I18nProvider({ children }) {
   const [language, setLanguageState] = useState(initialLanguage)
 
   const changeLanguage = (nextLanguage) => {
-    if (!resources[nextLanguage]) return
-    window.localStorage.setItem(languageKey, nextLanguage)
-    setLanguageState(nextLanguage)
+    const normalized = normalizeLanguage(nextLanguage)
+    window.localStorage.setItem(languageKey, normalized)
+    setLanguageState(normalized)
   }
 
   useEffect(() => {
@@ -45,10 +26,7 @@ export function I18nProvider({ children }) {
     language,
     languages,
     changeLanguage,
-    t: (key, variables = {}) => {
-      const value = readPath(resources[language], key) ?? readPath(resources.ru, key)
-      return typeof value === 'string' ? interpolate(value, variables) : missingLabel
-    },
+    t: createTranslator(language),
   }), [language])
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>

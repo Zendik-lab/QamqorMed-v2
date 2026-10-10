@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { ApiError, adminGetDoctors, getAdminDoctorSchedule, updateAdminDoctorSchedule } from '../api/apiClient.js'
-import { useTranslation } from '../i18n/index.jsx'
+import { adminGetDoctors, getAdminDoctorSchedule, updateAdminDoctorSchedule } from '../api/apiClient.js'
+import { translateError, useTranslation } from '../i18n/index.jsx'
 
 const days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']
 const emptyException = { date: '', type: 'DAY_OFF', startTime: '', endTime: '', note: '' }
@@ -21,7 +21,7 @@ export default function AdminSchedulePage() {
   const updateInterval = (index, field, value) => setSchedule((current) => ({ ...current, intervals: current.intervals.map((item, row) => row === index ? { ...item, [field]: value } : item) }))
   const addInterval = () => setSchedule((current) => ({ ...current, intervals: [...current.intervals, { dayOfWeek: 'MONDAY', startTime: '09:00', endTime: '18:00', breakInterval: false }] }))
   const removeInterval = (index) => setSchedule((current) => ({ ...current, intervals: current.intervals.filter((_, row) => row !== index) }))
-  const save = async (event) => { event.preventDefault(); setSaving(true); setError(''); setNotice(''); try { const value = await updateAdminDoctorSchedule(doctorId, { slotDurationMinutes: Number(schedule.slotDurationMinutes), intervals: schedule.intervals, exceptions: schedule.exceptions }); setSchedule(value); setNotice(t('admin.scheduleSaved')) } catch (requestError) { setError(requestError instanceof ApiError ? requestError.message : t('admin.scheduleSaveError')) } finally { setSaving(false) } }
+  const save = async (event) => { event.preventDefault(); setSaving(true); setError(''); setNotice(''); try { const value = await updateAdminDoctorSchedule(doctorId, { slotDurationMinutes: Number(schedule.slotDurationMinutes), intervals: schedule.intervals, exceptions: schedule.exceptions }); setSchedule(value); setNotice(t('admin.scheduleSaved')) } catch (requestError) { setError(translateError(requestError, t, 'admin.scheduleSaveError')) } finally { setSaving(false) } }
   const addException = () => { if (!exception.date) return; setSchedule((current) => ({ ...current, exceptions: [...current.exceptions.filter((item) => item.date !== exception.date), exception] })); setException(emptyException) }
   const removeException = (date) => setSchedule((current) => ({ ...current, exceptions: current.exceptions.filter((item) => item.date !== date) }))
   if (loading) return <section className="page-shell"><p className="route-message">{t('common.loading')}</p></section>
