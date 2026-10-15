@@ -64,9 +64,7 @@ public class AppointmentService {
         // Lock the doctor's row while validating and creating the appointment. This closes
         // the race where two patients confirm the same slot at the same time.
         DoctorProfile doctor = doctors.findByIdForUpdate(request.doctorId())
-                .filter(profile -> profile.isActive() && profile.getUser().isEnabled() && profile.getSpecialty().isActive()
-                        && profile.getClinic().isActive() && profile.getClinic().getCity().isActive()
-                        && profile.getClinic().getCity().getRegion().isActive())
+                .filter(DoctorProfile::isAvailableForBooking)
                 .orElseThrow(() -> new NotFoundException("Врач не найден"));
         validateBookingFilters(doctor, request);
         Dependent dependent = request.dependentId() == null ? null : patients.dependent(userId, request.dependentId());

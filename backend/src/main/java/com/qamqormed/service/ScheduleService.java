@@ -96,6 +96,7 @@ public class ScheduleService {
 
     @Transactional(readOnly = true)
     public boolean isBookable(DoctorSchedule schedule, LocalDateTime startsAt) {
+        if (!schedule.isActive()) return false;
         LocalDate date = startsAt.toLocalDate();
         LocalTime end = startsAt.toLocalTime().plusMinutes(schedule.getSlotDurationMinutes());
         if (!end.isAfter(startsAt.toLocalTime())) return false;

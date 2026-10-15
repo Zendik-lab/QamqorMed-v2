@@ -10,7 +10,6 @@ import com.qamqormed.repository.TimeSlotRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -21,10 +20,6 @@ import java.util.List;
 @Service
 public class TimeSlotService {
     private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Qyzylorda");
-    private static final List<LocalTime> DEFAULT_STARTS = List.of(
-            LocalTime.of(9, 0), LocalTime.of(9, 30), LocalTime.of(10, 0), LocalTime.of(10, 30),
-            LocalTime.of(14, 0), LocalTime.of(14, 30), LocalTime.of(15, 0), LocalTime.of(15, 30));
-
     private final TimeSlotRepository slots;
     private final DoctorProfileRepository doctors;
     private final ScheduleService schedules;
@@ -36,7 +31,7 @@ public class TimeSlotService {
     @Transactional
     public List<TimeSlotResponse> available(Long doctorId, LocalDate from, LocalDate to) {
         DoctorProfile doctor = doctors.findById(doctorId)
-                .filter(d -> d.isActive() && d.getUser().isEnabled() && d.getClinic().isActive())
+                .filter(DoctorProfile::isAvailableForBooking)
                 .orElseThrow(() -> new NotFoundException("Врач не найден"));
         LocalDate today = LocalDate.now(CLINIC_ZONE);
         LocalDate start = from == null || from.isBefore(today) ? today : from;
@@ -45,13 +40,16 @@ public class TimeSlotService {
         var schedule = schedules.scheduleForDoctor(doctor);
         ensureSlots(doctor, schedule, start, end);
         LocalDateTime fromAt = start.equals(today) ? LocalDateTime.now(CLINIC_ZONE) : start.atStartOfDay();
-        return slots.findAvailable(doctorId, fromAt, end.plusDays(1).atStartOfDay()).stream().map(TimeSlotResponse::from).toList();
+        return slots.findAvailable(doctorId, fromAt, end.plusDays(1).atStartOfDay()).stream()
+                .filter(slot -> schedules.isBookable(schedule, slot.getStartsAt()))
+                .map(TimeSlotResponse::from).toList();
     }
 
     @Transactional
     public TimeSlot slotForDoctor(Long slotId, Long doctorId) {
         TimeSlot slot = slots.findById(slotId)
-                .filter(value -> value.isActive() && value.getDoctor().getId().equals(doctorId))
+                .filter(value -> value.isActive() && value.getDoctor().getId().equals(doctorId)
+                        && value.getDoctor().isAvailableForBooking())
                 .orElseThrow(() -> new NotFoundException("Время приёма не найдено"));
         if (!schedules.isBookable(schedules.scheduleForDoctor(slot.getDoctor()), slot.getStartsAt())) throw new BadRequestException("Выбранное время больше недоступно по расписанию");
         return slot;
@@ -60,7 +58,7 @@ public class TimeSlotService {
     @Transactional
     public TimeSlot slotForDoctorAt(Long doctorId, LocalDateTime startsAt) {
         DoctorProfile doctor = doctors.findById(doctorId)
-                .filter(d -> d.isActive() && d.getUser().isEnabled())
+                .filter(DoctorProfile::isAvailableForBooking)
                 .orElseThrow(() -> new NotFoundException("Врач не найден"));
         var schedule = schedules.scheduleForDoctor(doctor);
         if (!schedules.isBookable(schedule, startsAt) && doctor.isDemo()) {
@@ -84,9 +82,9 @@ public class TimeSlotService {
             for (var interval : schedules.workingIntervals(schedule, day)) {
                 for (LocalTime time = interval.getStartTime(); time.plusMinutes(schedule.getSlotDurationMinutes()).compareTo(interval.getEndTime()) <= 0; time = time.plusMinutes(schedule.getSlotDurationMinutes())) {
                     LocalDateTime startsAt = LocalDateTime.of(day, time);
-                if (!slots.existsByDoctorIdAndStartsAt(doctor.getId(), startsAt)) {
-                    TimeSlot slot = new TimeSlot(); slot.setDoctor(doctor); slot.setStartsAt(startsAt); slot.setEndsAt(startsAt.plusMinutes(schedule.getSlotDurationMinutes())); slot.setActive(true); additions.add(slot);
-                }
+                    if (schedules.isBookable(schedule, startsAt) && !slots.existsByDoctorIdAndStartsAt(doctor.getId(), startsAt)) {
+                        TimeSlot slot = new TimeSlot(); slot.setDoctor(doctor); slot.setStartsAt(startsAt); slot.setEndsAt(startsAt.plusMinutes(schedule.getSlotDurationMinutes())); slot.setActive(true); additions.add(slot);
+                    }
                 }
             }
         }

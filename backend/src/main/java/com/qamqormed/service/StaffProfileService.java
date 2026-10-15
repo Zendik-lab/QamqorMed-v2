@@ -54,7 +54,6 @@ public class StaffProfileService {
             query.orderBy(criteria.asc(user.get("lastName")), criteria.asc(user.get("firstName")));
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(criteria.isTrue(root.get("active")));
-            predicates.add(criteria.isTrue(user.get("enabled")));
             predicates.add(criteria.isTrue(specialty.get("active")));
             predicates.add(criteria.isTrue(clinic.get("active")));
             predicates.add(criteria.isTrue(city.get("active")));
@@ -73,8 +72,7 @@ public class StaffProfileService {
     @Transactional(readOnly = true)
     public DoctorResponse publicDoctor(Long id) {
         DoctorProfile doctor = doctor(id);
-        if (!doctor.isActive() || !doctor.getUser().isEnabled() || !doctor.getSpecialty().isActive() || !doctor.getClinic().isActive()
-                || !doctor.getClinic().getCity().isActive() || !doctor.getClinic().getCity().getRegion().isActive()) {
+        if (!doctor.isAvailableForBooking()) {
             throw new NotFoundException("Врач не найден");
         }
         return doctorResponse(doctor);
@@ -201,7 +199,7 @@ public class StaffProfileService {
     @Transactional(readOnly = true)
     public NurseResponse publicNurseForDoctor(Long doctorId) {
         DoctorProfile doctor = doctor(doctorId);
-        if (!doctor.isActive() || !doctor.getClinic().isActive()) throw new NotFoundException("Врач не найден");
+        if (!doctor.isAvailableForBooking()) throw new NotFoundException("Врач не найден");
         var assignment = assignments.findActiveByDoctorId(doctorId).orElseThrow(() -> new NotFoundException("Назначенная медсестра не найдена"));
         return NurseResponse.from(assignment.getNurse(), doctor);
     }
@@ -256,7 +254,7 @@ public class StaffProfileService {
             var user = root.join("user", JoinType.INNER); var specialty = root.join("specialty", JoinType.INNER);
             var clinic = root.join("clinic", JoinType.INNER); var city = clinic.join("city", JoinType.INNER); var region = city.join("region", JoinType.INNER);
             List<Predicate> predicates = new ArrayList<>();
-            predicates.add(criteria.isTrue(root.get("active"))); predicates.add(criteria.isTrue(user.get("enabled")));
+            predicates.add(criteria.isTrue(root.get("active")));
             predicates.add(criteria.isTrue(specialty.get("active"))); predicates.add(criteria.isTrue(clinic.get("active")));
             predicates.add(criteria.isTrue(city.get("active"))); predicates.add(criteria.isTrue(region.get("active")));
             if (regionId != null) predicates.add(criteria.equal(region.get("id"), regionId));

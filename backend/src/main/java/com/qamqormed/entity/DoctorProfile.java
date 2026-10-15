@@ -69,6 +69,11 @@ public class DoctorProfile {
     public void setDemo(boolean demo) { this.demo = demo; }
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
+    /** Catalog and booking availability is independent of the account's ability to log in. */
+    public boolean isAvailableForBooking() {
+        return active && specialty.isActive() && clinic.isActive()
+                && clinic.getCity().isActive() && clinic.getCity().getRegion().isActive();
+    }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
 }

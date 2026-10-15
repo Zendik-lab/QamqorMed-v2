@@ -18,6 +18,7 @@ public interface DoctorProfileRepository extends JpaRepository<DoctorProfile, Lo
     List<DoctorProfile> findAllWithDetails();
     long countByDemoTrue();
     long countByDemoTrueAndActiveTrue();
-    @Query("select distinct s from DoctorProfile d join d.specialty s join d.clinic c join c.city city join city.region r where d.active = true and d.user.enabled = true and s.active = true and c.active = true and city.active = true and r.active = true and city.id = :cityId order by s.name")
+    // Account enabled controls authentication; profile/catalog activity controls booking visibility.
+    @Query("select distinct s from DoctorProfile d join d.specialty s join d.clinic c join c.city city join city.region r where d.active = true and s.active = true and c.active = true and city.active = true and r.active = true and city.id = :cityId order by s.name")
     List<com.qamqormed.entity.Specialty> findActiveSpecialtiesByCityId(Long cityId);
 }

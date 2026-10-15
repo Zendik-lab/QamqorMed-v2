@@ -19,7 +19,7 @@ public interface ClinicRepository extends JpaRepository<Clinic, Long> {
     List<Clinic> findAllByRegionId(Long regionId);
     @Query("select c from Clinic c join fetch c.city city join fetch city.region r where c.city.region.id = :regionId and c.active = true and city.active = true and r.active = true order by c.name")
     List<Clinic> findPublicByRegionId(Long regionId);
-    @Query("select distinct c from Clinic c join fetch c.city city join fetch city.region r where c.id in (select d.clinic.id from DoctorProfile d where d.active = true and d.user.enabled = true and d.specialty.id = :specialtyId) and c.city.id = :cityId and c.active = true and city.active = true and r.active = true order by c.name")
+    @Query("select distinct c from Clinic c join fetch c.city city join fetch city.region r where c.id in (select d.clinic.id from DoctorProfile d where d.active = true and d.specialty.active = true and d.specialty.id = :specialtyId) and c.city.id = :cityId and c.active = true and city.active = true and r.active = true order by c.name")
     List<Clinic> findPublicByCityIdAndSpecialtyId(Long cityId, Long specialtyId);
     java.util.Optional<Clinic> findByNameIgnoreCaseAndCityId(String name, Long cityId);
     java.util.Optional<Clinic> findByExternalSourceId(String externalSourceId);
