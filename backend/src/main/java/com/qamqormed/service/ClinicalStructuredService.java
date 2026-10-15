@@ -8,6 +8,7 @@ import com.qamqormed.exception.NotFoundException;
 import com.qamqormed.repository.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.PageRequest;
 
 import java.util.List;
 
@@ -38,7 +39,9 @@ public class ClinicalStructuredService {
     @Transactional(readOnly = true)
     public List<ICD10CodeResponse> searchCodes(String query) {
         String normalized = query == null ? "" : query.trim();
-        return (normalized.isBlank() ? codes.findAll().stream().filter(ICD10Code::isActive).limit(50).toList() : codes.search(normalized))
+        return (normalized.isBlank()
+                ? codes.findAll(PageRequest.of(0, 50)).stream().filter(item -> item.isActive() && item.isSelectable()).toList()
+                : codes.search(normalized, PageRequest.of(0, 50)).getContent())
                 .stream().map(ICD10CodeResponse::from).toList();
     }
 
@@ -52,7 +55,12 @@ public class ClinicalStructuredService {
         }
         VisitDiagnosis diagnosis = new VisitDiagnosis();
         diagnosis.setMedicalVisit(visit); diagnosis.setIcd10Code(code);
+        diagnosis.setIcd10CodeSnapshot(code.getCode());
+        diagnosis.setIcd10NameSnapshot(code.getName());
         diagnosis.setNotes(trim(request.notes())); diagnosis.setPrimaryDiagnosis(request.primary());
+        diagnosis.setDiagnosisType(request.diagnosisType() == null
+                ? (request.primary() ? DiagnosisType.PRIMARY : DiagnosisType.SECONDARY)
+                : request.diagnosisType());
         // Keep the legacy human-readable field synchronized so the existing
         // completion guard also supports the structured ICD-10 workflow.
         if (blank(visit.getDiagnosis())) visit.setDiagnosis(code.getCode() + " — " + code.getName());

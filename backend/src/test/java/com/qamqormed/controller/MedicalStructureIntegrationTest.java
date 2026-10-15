@@ -22,6 +22,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -221,10 +222,37 @@ class MedicalStructureIntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.name").value("Парацетамол"));
         mockMvc.perform(post("/api/doctor/appointments/{id}/referrals", appointment.getId()).header("Authorization", "Bearer " + doctorToken)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"referralType\":\"LABORATORY\",\"reason\":\"Общий анализ крови\"}"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("CREATED"));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("CREATED")).andExpect(jsonPath("$.medicalVisitId").exists());
         mockMvc.perform(post("/api/doctor/appointments/{id}/documents", appointment.getId()).header("Authorization", "Bearer " + doctorToken)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"type\":\"CONCLUSION\",\"title\":\"Заключение врача\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.title").value("Заключение врача"));
+
+        // A document is issued by the doctor before the visit is completed. It must already
+        // be visible to the owning patient, while drafts/cancelled documents remain hidden.
+        Long documentId = documents.findAll().stream().findFirst().orElseThrow().getId();
+        mockMvc.perform(get("/api/patient/documents").param("subjectId", child.getId().toString())
+                        .header("Authorization", "Bearer " + patientToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$[0].title").value("Заключение врача"))
+                .andExpect(jsonPath("$[0].draftContent").value(org.hamcrest.Matchers.nullValue()));
+        mockMvc.perform(get("/api/patient/documents/{id}", documentId).param("subjectId", child.getId().toString())
+                        .header("Authorization", "Bearer " + patientToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(documentId));
+        mockMvc.perform(get("/api/patients/{patientId}/visits/{visitId}/documents", child.getId(), documents.findById(documentId).orElseThrow().getMedicalVisit().getId())
+                        .header("Authorization", "Bearer " + patientToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)));
+        mockMvc.perform(get("/api/patient/documents/{id}/pdf", documentId).param("subjectId", child.getId().toString())
+                        .header("Authorization", "Bearer " + patientToken))
+                .andExpect(status().isOk()).andExpect(content().contentType(MediaType.APPLICATION_PDF))
+                .andExpect(result -> org.junit.jupiter.api.Assertions.assertTrue(
+                        new String(result.getResponse().getContentAsByteArray(), java.nio.charset.StandardCharsets.ISO_8859_1).startsWith("%PDF")));
+
+        User anotherPatient = user("+77000000116", Role.PATIENT);
+        String anotherPatientToken = login(anotherPatient.getPhone());
+        mockMvc.perform(get("/api/patient/documents").header("Authorization", "Bearer " + anotherPatientToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$", org.hamcrest.Matchers.empty()));
+        mockMvc.perform(get("/api/patient/documents/{id}/pdf", documentId).header("Authorization", "Bearer " + anotherPatientToken))
+                .andExpect(status().isForbidden());
         mockMvc.perform(post("/api/doctor/appointments/{id}/complete", appointment.getId()).header("Authorization", "Bearer " + doctorToken))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("COMPLETED"));
 

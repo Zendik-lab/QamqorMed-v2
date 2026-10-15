@@ -12,6 +12,9 @@ public record AppointmentResponse(
         ClinicSummary clinic,
         LocalDateTime appointmentAt,
         String status,
+        String confirmationStatus,
+        java.time.Instant confirmedAt,
+        java.time.Instant arrivedAt,
         String note,
         java.time.LocalTime startTime,
         java.time.LocalTime endTime
@@ -35,7 +38,9 @@ public record AppointmentResponse(
                 new PersonSummary(appointment.getBookedBy().getId(), fullName(appointment.getBookedBy().getLastName(), appointment.getBookedBy().getFirstName(), appointment.getBookedBy().getMiddleName())),
                 new StaffSummary(doctor.getId(), doctorUser.getId(), fullName(doctorUser.getLastName(), doctorUser.getFirstName(), doctorUser.getMiddleName()), doctor.getSpecialty().getName()),
                 new ClinicSummary(clinic.getId(), clinic.getName(), city.getName(), city.getRegion().getName()),
-                appointment.getAppointmentAt(), responseStatus(appointment), appointment.getNote(),
+                appointment.getAppointmentAt(), responseStatus(appointment),
+                appointment.getConfirmationStatus() == null ? "PENDING" : appointment.getConfirmationStatus().name(),
+                appointment.getConfirmedAt(), appointment.getArrivedAt(), appointment.getNote(),
                 appointment.getTimeSlot() == null ? appointment.getAppointmentAt().toLocalTime() : appointment.getTimeSlot().getStartsAt().toLocalTime(),
                 appointment.getTimeSlot() == null ? appointment.getAppointmentAt().toLocalTime().plusMinutes(30) : appointment.getTimeSlot().getEndsAt().toLocalTime());
     }

@@ -1,0 +1,20 @@
+{
+  "name": "QamqorMed",
+  "short_name": "QamqorMed",
+  "description": "Защищённая медицинская платформа QamqorMed",
+  "lang": "ru",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f4f8fb",
+  "theme_color": "#167d83",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

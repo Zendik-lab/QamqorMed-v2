@@ -11,7 +11,10 @@ import com.qamqormed.dto.RegionResponse;
 import com.qamqormed.dto.SpecialtyResponse;
 import com.qamqormed.service.DevToolsService;
 import com.qamqormed.service.DataIntegrityAuditService;
+import com.qamqormed.exception.ForbiddenException;
+import com.qamqormed.security.AuthenticatedUser;
 import org.springframework.context.annotation.Profile;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -48,7 +51,11 @@ public class DevToolsController {
     }
 
     @GetMapping("/users/{userId}/relation")
-    public DevRelationResponse relation(@PathVariable Long userId) {
+    public DevRelationResponse relation(@PathVariable Long userId,
+                                        @AuthenticationPrincipal AuthenticatedUser principal) {
+        if (principal.getRole() != com.qamqormed.entity.Role.ADMIN && !principal.getId().equals(userId)) {
+            throw new ForbiddenException("Связь доступна только для текущего DEMO-пользователя");
+        }
         return service.relationForUser(userId);
     }
 

@@ -10,6 +10,9 @@ public record AppointmentDetailsResponse(
         AppointmentResponse.ClinicSummary clinic,
         java.time.LocalDateTime appointmentAt,
         String status,
+        String confirmationStatus,
+        java.time.Instant confirmedAt,
+        java.time.Instant arrivedAt,
         String note,
         NurseIntakeResponse nurseAssessment,
         MedicalVisitResponse medicalVisit,
@@ -19,7 +22,7 @@ public record AppointmentDetailsResponse(
                                                    MedicalVisitResponse visit) {
         AppointmentResponse summary = AppointmentResponse.from(appointment);
         return new AppointmentDetailsResponse(summary.id(), summary.subject(), summary.bookedBy(), summary.doctor(),
-                summary.clinic(), summary.appointmentAt(), summary.status(), summary.note(), assessment, visit,
+                summary.clinic(), summary.appointmentAt(), summary.status(), summary.confirmationStatus(), summary.confirmedAt(), summary.arrivedAt(), summary.note(), assessment, visit,
                 appointment.getCanonicalStatus() == com.qamqormed.entity.AppointmentStatus.COMPLETED);
     }
 }

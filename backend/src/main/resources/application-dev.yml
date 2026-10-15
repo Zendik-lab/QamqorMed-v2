@@ -6,6 +6,8 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
+  flyway:
+    enabled: false
   sql:
     init:
       mode: always

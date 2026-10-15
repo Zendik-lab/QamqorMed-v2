@@ -8,6 +8,7 @@ export const adminMenuItems = [
   ['cities', '/admin/cities', '▦'],
   ['clinics', '/admin/clinics', '＋'],
   ['specialties', '/admin/specialties', '✦'],
+  ['documentTemplates', '/admin/document-templates', '▤'],
   ['doctors', '/admin/doctors', '♧'],
   ['nurses', '/admin/nurses', '♧'],
   ['schedule', '/admin/schedule', '◷'],
@@ -29,7 +30,7 @@ function AdminSidebar({ open = false, onClose }) {
   }
 
   return (
-    <aside className={`dashboard-sidebar ${open ? 'dashboard-sidebar--open' : ''}`}>
+    <aside id="app-sidebar" className={`dashboard-sidebar ${open ? 'dashboard-sidebar--open' : ''}`}>
       <div className="sidebar-brand">
         <button className="brand-link" type="button" onClick={() => goTo('/')} aria-label="QamqorMed">
           <span className="brand-mark" aria-hidden="true">Q</span>

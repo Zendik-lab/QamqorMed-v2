@@ -57,7 +57,7 @@ public class MedicalHistoryService {
         Scope scope = scope(userId, requestedSubjectId);
         List<MedicalVisit> subjectVisits = visits(scope);
         return new MedicalHistoryResponse(scope.subject(), summary(scope, subjectVisits), timeline(scope, subjectVisits),
-                subjectVisits.stream().map(workflow::visitResponse).toList());
+                subjectVisits.stream().map(item -> workflow.visitResponse(item, true)).toList());
     }
 
     @Transactional(readOnly = true)
@@ -68,7 +68,7 @@ public class MedicalHistoryService {
 
     @Transactional(readOnly = true)
     public List<MedicalVisitResponse> visitResponses(Long userId, Long requestedSubjectId) {
-        return visits(scope(userId, requestedSubjectId)).stream().map(workflow::visitResponse).toList();
+        return visits(scope(userId, requestedSubjectId)).stream().map(item -> workflow.visitResponse(item, true)).toList();
     }
 
     @Transactional(readOnly = true)
@@ -77,7 +77,7 @@ public class MedicalHistoryService {
                 .filter(item -> item.getId().equals(visitId))
                 .findFirst()
                 .orElseThrow(() -> new NotFoundException("Посещение не найдено"));
-        return workflow.visitResponse(visit);
+        return workflow.visitResponse(visit, true);
     }
 
     @Transactional(readOnly = true)
@@ -128,17 +128,28 @@ public class MedicalHistoryService {
 
     @Transactional(readOnly = true)
     public List<MedicalDocumentResponse> documentResponses(Long userId, Long subjectId) {
-        return visits(scope(userId, subjectId)).stream()
-                .flatMap(visit -> documents.findAllByMedicalVisitIdOrderByCreatedAtAsc(visit.getId()).stream())
-                .map(MedicalDocumentResponse::from).toList();
+        return visibleDocuments(scope(userId, subjectId)).stream()
+                .map(MedicalDocumentResponse::fromPatient).toList();
     }
 
     @Transactional(readOnly = true)
     public MedicalDocumentResponse document(Long userId, Long subjectId, Long documentId) {
-        return documentResponses(userId, subjectId).stream()
-                .filter(item -> item.id().equals(documentId))
+        return visibleDocuments(scope(userId, subjectId)).stream()
+                .filter(item -> item.getId().equals(documentId))
+                .map(MedicalDocumentResponse::fromPatient)
                 .findFirst()
                 .orElseThrow(() -> new NotFoundException("Документ не найден"));
+    }
+
+    @Transactional(readOnly = true)
+    public List<MedicalDocumentResponse> visitDocuments(Long userId, Long subjectId, Long visitId) {
+        Scope scope = scope(userId, subjectId);
+        MedicalVisit visit = visits.findById(visitId)
+                .orElseThrow(() -> new NotFoundException("Посещение не найдено"));
+        if (!belongsTo(visit, scope)) throw new NotFoundException("Посещение не найдено");
+        return documents.findAllByMedicalVisitIdOrderByCreatedAtAsc(visitId).stream()
+                .filter(this::isPatientVisibleDocument)
+                .map(MedicalDocumentResponse::fromPatient).toList();
     }
 
     private Scope scope(Long userId, Long requestedSubjectId) {
@@ -169,12 +180,33 @@ public class MedicalHistoryService {
         return result.stream().filter(item -> item.getCompletedAt() != null).toList();
     }
 
+    /** Documents become visible after approval, independently of visit completion. */
+    private List<MedicalDocument> visibleDocuments(Scope scope) {
+        List<MedicalDocument> result = scope.dependent() == null
+                ? documents.findAllByPatientUserIdAndDependentIsNullOrderByCreatedAtDesc(scope.profile().getUser().getId())
+                : documents.findAllByDependentIdOrderByCreatedAtDesc(scope.dependent().getId());
+        return result.stream().filter(this::isPatientVisibleDocument).toList();
+    }
+
+    private boolean belongsTo(MedicalVisit visit, Scope scope) {
+        if (scope.dependent() != null) {
+            return visit.getDependent() != null && scope.dependent().getId().equals(visit.getDependent().getId());
+        }
+        if (visit.getDependent() != null) return false;
+        if (visit.getPatientProfile() != null) {
+            return visit.getPatientProfile().getUser() != null
+                    && scope.profile().getUser().getId().equals(visit.getPatientProfile().getUser().getId());
+        }
+        return visit.getPatientUser() != null
+                && scope.profile().getUser().getId().equals(visit.getPatientUser().getId());
+    }
+
     private MedicalHistorySummaryResponse summary(Scope scope, List<MedicalVisit> subjectVisits) {
         List<VisitDiagnosis> diagnosisItems = subjectVisits.stream().flatMap(item -> diagnoses.findAllByMedicalVisitIdOrderByPrimaryDiagnosisDescCreatedAtAsc(item.getId()).stream()).toList();
         List<Prescription> prescriptionItems = subjectVisits.stream().flatMap(item -> prescriptions.findAllByMedicalVisitIdOrderByCreatedAtAsc(item.getId()).stream()).toList();
         List<MedicationPrescription> medicationItems = subjectVisits.stream().flatMap(item -> medications.findAllByMedicalVisitIdOrderByCreatedAtAsc(item.getId()).stream()).toList();
         List<Referral> referralItems = subjectVisits.stream().flatMap(item -> referrals.findAllByMedicalVisitIdOrderByCreatedAtAsc(item.getId()).stream()).toList();
-        List<MedicalDocument> documentItems = subjectVisits.stream().flatMap(item -> documents.findAllByMedicalVisitIdOrderByCreatedAtAsc(item.getId()).stream()).toList();
+        List<MedicalDocument> documentItems = subjectVisits.stream().flatMap(item -> documents.findAllByMedicalVisitIdOrderByCreatedAtAsc(item.getId()).stream().filter(this::isPatientVisibleDocument)).toList();
         List<LabResult> labItems = scope.dependent() == null
                 ? labs.findAllByPatientProfileIdOrderByTestDateDesc(scope.profile().getId())
                 : labs.findAllByDependentIdOrderByTestDateDesc(scope.dependent().getId());
@@ -209,7 +241,7 @@ public class MedicalHistoryService {
                     result.add(new MedicalTimelineItemResponse("REFERRAL", item.getCreatedAt(), item.getReferralType().name(), item.getReason(), item.getId(), visit.getId())));
             certificates.findAllByMedicalVisitIdOrderByIssuedAtDesc(visit.getId()).forEach(item ->
                     result.add(new MedicalTimelineItemResponse("CERTIFICATE", item.getIssuedAt(), item.getType(), item.getDescription(), item.getId(), visit.getId())));
-            documents.findAllByMedicalVisitIdOrderByCreatedAtAsc(visit.getId()).forEach(item ->
+            documents.findAllByMedicalVisitIdOrderByCreatedAtAsc(visit.getId()).stream().filter(this::isPatientVisibleDocument).forEach(item ->
                     result.add(new MedicalTimelineItemResponse("DOCUMENT", item.getCreatedAt(), item.getTitle(), item.getDescription(), item.getId(), visit.getId())));
         }
         return result.stream().sorted(Comparator.comparing(MedicalTimelineItemResponse::date, Comparator.nullsLast(Comparator.reverseOrder()))).toList();
@@ -223,6 +255,10 @@ public class MedicalHistoryService {
 
     private String firstNonBlank(String first, String second, String fallback) {
         return first != null && !first.isBlank() ? first : second != null && !second.isBlank() ? second : fallback;
+    }
+
+    private boolean isPatientVisibleDocument(MedicalDocument document) {
+        return document.getStatus() == null || document.getStatus() == MedicalDocumentStatus.APPROVED;
     }
 
     private record Scope(MedicalSubjectDto subject, PatientProfile profile, Dependent dependent) {}

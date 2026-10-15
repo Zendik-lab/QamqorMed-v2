@@ -47,14 +47,23 @@ public class SecurityConfig {
                         .accessDeniedHandler(new JsonAccessDeniedHandler(objectMapper))
                 )
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/api/health", "/api/auth/login", "/api/auth/register", "/api/dev/**").permitAll()
+                        .requestMatchers("/api/health", "/api/auth/login", "/api/auth/register").permitAll()
+                        // The role-switching/catalog endpoints remain available in dev so the
+                        // development UI can bootstrap, but appointment inventory and workflow
+                        // actions expose cross-patient data and require a signed ADMIN session.
+                        .requestMatchers("/api/dev/appointments/**", "/api/dev/notification-workflow/**", "/api/dev/audit").hasRole("ADMIN")
+                        .requestMatchers("/api/dev/users/search", "/api/dev/login/**", "/api/dev/filters/**").permitAll()
+                        .requestMatchers("/api/dev/users/*/relation").hasAnyRole("ADMIN", "DOCTOR", "NURSE")
+                        .requestMatchers("/api/dev/**").denyAll()
                         .requestMatchers("/api/patient/**").hasRole("PATIENT")
-                        .requestMatchers("/api/patient-profiles", "/api/patients/**", "/api/appointments/**").hasRole("PATIENT")
+                        .requestMatchers("/api/patient-profiles", "/api/patients/**").hasRole("PATIENT")
+                        .requestMatchers("/api/notifications/**", "/api/appointments/**").authenticated()
                         .requestMatchers("/api/doctor/**").hasRole("DOCTOR")
                         .requestMatchers("/api/nurse/**").hasRole("NURSE")
                         .requestMatchers("/api/doctors/me/**").hasRole("DOCTOR")
                         .requestMatchers("/api/nurses/me/**").hasRole("NURSE")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/icd10/**").hasAnyRole("DOCTOR", "ADMIN")
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

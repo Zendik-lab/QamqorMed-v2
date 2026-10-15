@@ -1,14 +1,30 @@
-const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8080').replace(/\/$/, '')
+function normalizeApiBase(value) {
+  const normalized = String(value || '').trim().replace(/\/+$/, '')
+  if (!normalized || normalized === '/api') return ''
+  // Endpoint paths below already contain /api. Accept an env value with the
+  // suffix without producing /api/api/... URLs.
+  return normalized.endsWith('/api') ? normalized.slice(0, -4) : normalized
+}
+
+// Empty by default means same-origin /api. The browser never needs to know
+// the private address of the Spring Boot process behind the Vite proxy.
+const apiBase = normalizeApiBase(import.meta.env.VITE_API_URL)
 const tokenKey = 'qamqormed.accessToken'
+
+function buildApiUrl(path) {
+  const normalizedPath = String(path).startsWith('/') ? path : `/${path}`
+  return `${apiBase}${normalizedPath}`
+}
 
 let unauthorizedHandler = null
 
 export class ApiError extends Error {
-  constructor(status, message, errors = {}) {
+  constructor(status, message, errors = {}, code = null) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.errors = errors
+    this.code = code
   }
 }
 
@@ -33,7 +49,7 @@ async function request(path, options = {}) {
   const token = getStoredToken()
   const headers = {
     Accept: 'application/json',
-    ...(fetchOptions.body ? { 'Content-Type': 'application/json' } : {}),
+    ...(fetchOptions.body && !(fetchOptions.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
     ...fetchOptions.headers,
   }
 
@@ -43,10 +59,15 @@ async function request(path, options = {}) {
 
   delete fetchOptions.auth
 
-  const response = await fetch(`${apiUrl}${path}`, {
-    ...fetchOptions,
-    headers,
-  })
+  let response
+  try {
+    response = await fetch(buildApiUrl(path), { ...fetchOptions, headers })
+  } catch (error) {
+    if (error?.name === 'AbortError') throw error
+    // Keep browser/network internals out of the UI. The stable code is
+    // translated to a localized, user-safe message.
+    throw new ApiError(0, 'Network request failed', {}, 'network')
+  }
 
   if (!response.ok) {
     const text = await response.text()
@@ -70,6 +91,29 @@ async function request(path, options = {}) {
 
   const text = await response.text()
   return text ? JSON.parse(text) : null
+}
+
+async function requestBlob(path, options = {}) {
+  const { handleUnauthorized = true, ...fetchOptions } = options
+  const token = getStoredToken()
+  const headers = { Accept: 'application/pdf', ...fetchOptions.headers }
+  if (token && fetchOptions.auth !== false) headers.Authorization = `Bearer ${token}`
+  delete fetchOptions.auth
+  let response
+  try {
+    response = await fetch(buildApiUrl(path), { ...fetchOptions, headers })
+  } catch (error) {
+    if (error?.name === 'AbortError') throw error
+    throw new ApiError(0, 'Network request failed', {}, 'network')
+  }
+  if (!response.ok) {
+    const text = await response.text()
+    let payload = {}
+    try { payload = text ? JSON.parse(text) : {} } catch { payload = {} }
+    if (response.status === 401 && handleUnauthorized) unauthorizedHandler?.()
+    throw new ApiError(response.status, payload.message || `Request failed with status ${response.status}`, payload.errors || {})
+  }
+  return response.blob()
 }
 
 export function getHealth(signal) {
@@ -143,6 +187,18 @@ export const deleteDependent = (id) => request(`/api/patient/dependents/${id}`, 
 export const getPatientAppointments = () => request('/api/patient/appointments')
 export const createPatientAppointment = (body) => request('/api/patient/appointments', { method: 'POST', body: JSON.stringify(body) })
 export const cancelPatientAppointment = (id) => request(`/api/patient/appointments/${id}`, { method: 'DELETE' })
+export const confirmPatientAppointment = (id) => request(`/api/appointments/${id}/confirm`, { method: 'PATCH' })
+export const declinePatientAppointment = (id) => request(`/api/appointments/${id}/decline`, { method: 'PATCH' })
+export const getAttendance = (patientId) => request(`/api/patients/${patientId}/attendance`)
+export const getNotifications = () => request('/api/notifications')
+export const getUnreadNotificationCount = () => request('/api/notifications/unread-count')
+export const markNotificationRead = (id) => request(`/api/notifications/${id}/read`, { method: 'PATCH' })
+export const markAllNotificationsRead = () => request('/api/notifications/read-all', { method: 'PATCH' })
+export const getWaitlist = () => request('/api/waitlist')
+export const createWaitlist = (body) => request('/api/waitlist', { method: 'POST', body: JSON.stringify(body) })
+export const cancelWaitlist = (id) => request(`/api/waitlist/${id}`, { method: 'DELETE' })
+export const bookWaitlist = (id, body) => request(`/api/waitlist/${id}/book`, { method: 'POST', body: JSON.stringify(body) })
+export const getAdminAppointmentStatistics = (params = {}) => request(`/api/admin/appointments/statistics${queryString(params)}`)
 export const getPatientMedicalRecords = () => request('/api/patient/medical-records')
 export const getDependentMedicalRecords = (id) => request(`/api/patient/dependents/${id}/medical-records`)
 export const getPatientDiagnoses = (subjectId) => request(`/api/patient/diagnoses${queryString({ subjectId })}`)
@@ -152,6 +208,8 @@ export const getPatientLabResults = (subjectId) => request(`/api/patient/lab-res
 export const getPatientCertificates = (subjectId) => request(`/api/patient/certificates${queryString({ subjectId })}`)
 export const getPatientReferrals = (subjectId) => request(`/api/patient/referrals${queryString({ subjectId })}`)
 export const getPatientDocuments = (subjectId) => request(`/api/patient/documents${queryString({ subjectId })}`)
+export const getPatientDocument = (id, subjectId) => request(`/api/patient/documents/${id}${queryString({ subjectId })}`)
+export const getPatientVisitDocuments = (patientId, visitId) => request(`/api/patients/${patientId}/visits/${visitId}/documents`)
 export const getPatientMedicalHistory = (subjectId) => request(`/api/patient/medical-history${queryString({ subjectId })}`)
 export const getPatientSubjectVisits = (patientId) => request(`/api/patients/${patientId}/visits`)
 export const getPatientSubjectDiagnoses = (patientId) => request(`/api/patients/${patientId}/diagnoses`)
@@ -176,12 +234,27 @@ export const getNurseAppointmentDetails = (id) => request(`/api/nurse/appointmen
 export const startDoctorAppointment = (id) => request(`/api/doctor/appointments/${id}/start`, { method: 'POST' })
 export const updateDoctorVisit = (id, body) => request(`/api/doctor/appointments/${id}/visit`, { method: 'PUT', body: JSON.stringify(body) })
 export const getIcd10Codes = (query) => request(`/api/icd10${queryString({ query })}`)
+export const getDoctorDocumentTemplates = (params = {}) => request(`/api/doctor/document-templates${queryString(params)}`)
+export const createDoctorDocumentTemplate = (body) => request('/api/doctor/document-templates', { method: 'POST', body: JSON.stringify(body) })
+export const addDoctorTemplateVersion = (id, body) => request(`/api/doctor/document-templates/${id}/versions`, { method: 'POST', body: JSON.stringify(body) })
+export const getDoctorTemplateVersions = (id) => request(`/api/doctor/document-templates/${id}/versions`)
+export const favoriteDoctorTemplate = (id) => request(`/api/doctor/document-templates/${id}/favorite`, { method: 'POST' })
+export const unfavoriteDoctorTemplate = (id) => request(`/api/doctor/document-templates/${id}/favorite`, { method: 'DELETE' })
+export const setDoctorDefaultTemplate = (type, templateId) => request(`/api/doctor/document-templates/defaults/${type}${queryString({ templateId })}`, { method: 'PUT' })
+export const createDoctorDocumentDraft = (appointmentId, body) => request(`/api/doctor/appointments/${appointmentId}/document-drafts`, { method: 'POST', body: JSON.stringify(body) })
+export const getDoctorDocument = (id) => request(`/api/doctor/documents/${id}`)
+export const saveDoctorDocumentDraft = (id, body) => request(`/api/doctor/documents/${id}`, { method: 'PUT', body: JSON.stringify(body) })
+export const approveDoctorDocument = (id) => request(`/api/doctor/documents/${id}/approve`, { method: 'POST' })
+export const downloadDoctorDocumentPdf = (id) => requestBlob(`/api/doctor/documents/${id}/pdf`)
+export const downloadPatientDocumentPdf = (id, subjectId) => requestBlob(`/api/patient/documents/${id}/pdf${queryString({ subjectId })}`)
 export const addDoctorDiagnosis = (id, body) => request(`/api/doctor/appointments/${id}/diagnoses`, { method: 'POST', body: JSON.stringify(body) })
 export const addDoctorLabResult = (id, body) => request(`/api/doctor/appointments/${id}/lab-results`, { method: 'POST', body: JSON.stringify(body) })
 export const addDoctorCertificate = (id, body) => request(`/api/doctor/appointments/${id}/certificates`, { method: 'POST', body: JSON.stringify(body) })
 export const addDoctorPrescription = (id, body) => request(`/api/doctor/appointments/${id}/prescriptions`, { method: 'POST', body: JSON.stringify(body) })
 export const addDoctorMedication = (id, body) => request(`/api/doctor/appointments/${id}/medications`, { method: 'POST', body: JSON.stringify(body) })
 export const addDoctorReferral = (id, body) => request(`/api/doctor/appointments/${id}/referrals`, { method: 'POST', body: JSON.stringify(body) })
+export const getDoctorReferrals = (params = {}) => request(`/api/doctor/referrals${queryString(params)}`)
+export const downloadDoctorReferralPdf = (id) => requestBlob(`/api/doctor/referrals/${id}/pdf`)
 export const addDoctorDocument = (id, body) => request(`/api/doctor/appointments/${id}/documents`, { method: 'POST', body: JSON.stringify(body) })
 export const completeDoctorAppointment = (id) => request(`/api/doctor/appointments/${id}/complete`, { method: 'POST' })
 export const createDoctorMedicalRecord = (id, body) => request(`/api/doctor/appointments/${id}/medical-record`, { method: 'POST', body: JSON.stringify(body) })
@@ -198,18 +271,27 @@ export const getPatientSubjectAppointments = (patientId) => request(`/api/patien
 export const getPatientSubjectHistory = (patientId) => request(`/api/patients/${patientId}/medical-history`)
 export const getAppointmentResult = (appointmentId) => request(`/api/appointments/${appointmentId}/result`)
 
-export const devSearchUsers = (params, signal) => request(`/api/dev/users/search${queryString(params)}`, { signal, handleUnauthorized: false })
-export const devGetRelation = (userId) => request(`/api/dev/users/${userId}/relation`, { handleUnauthorized: false })
+// These endpoints are the development-only account picker. They deliberately
+// work before normal authentication and must not turn an expected anonymous
+// request (or an expired token left in another tab) into a global logout.
+const devBootstrapOptions = { auth: false, handleUnauthorized: false }
+
+export const devSearchUsers = (params, signal) => request(`/api/dev/users/search${queryString(params)}`, { ...devBootstrapOptions, signal })
+export const devGetRelation = (userId) => request(`/api/dev/users/${userId}/relation`)
 export const devLogin = (userId) => request(`/api/dev/login/${userId}`, {
   method: 'POST',
-  handleUnauthorized: false,
+  ...devBootstrapOptions,
 })
-export const devGetRegions = () => request('/api/dev/filters/regions', { handleUnauthorized: false })
-export const devGetCities = (regionId) => request(`/api/dev/filters/regions/${regionId}/cities`, { handleUnauthorized: false })
-export const devGetClinics = (cityId) => request(`/api/dev/filters/cities/${cityId}/clinics`, { handleUnauthorized: false })
-export const devGetSpecialties = (clinicId) => request(`/api/dev/filters/clinics/${clinicId}/specialties`, { handleUnauthorized: false })
-export const devGetAllSpecialties = () => request('/api/dev/filters/specialties', { handleUnauthorized: false })
-export const devGetIntegrityAudit = () => request('/api/dev/audit', { handleUnauthorized: false })
+export const devGetRegions = () => request('/api/dev/filters/regions', devBootstrapOptions)
+export const devGetCities = (regionId) => request(`/api/dev/filters/regions/${regionId}/cities`, devBootstrapOptions)
+export const devGetClinics = (cityId) => request(`/api/dev/filters/cities/${cityId}/clinics`, devBootstrapOptions)
+export const devGetSpecialties = (clinicId) => request(`/api/dev/filters/clinics/${clinicId}/specialties`, devBootstrapOptions)
+export const devGetAllSpecialties = () => request('/api/dev/filters/specialties', devBootstrapOptions)
+export const devSearchAppointments = (params, signal) => request(`/api/dev/appointments${queryString(params)}`, { signal })
+export const devSearchWorkflowAppointments = (params, signal) => request(`/api/dev/notification-workflow/appointments${queryString(params)}`, { signal })
+export const devGetWorkflowAppointment = (appointmentId) => request(`/api/dev/notification-workflow/appointments/${appointmentId}`)
+export const devRunWorkflowAction = (appointmentId, action) => request(`/api/dev/notification-workflow/appointments/${appointmentId}/${action}`, { method: 'POST' })
+export const devGetIntegrityAudit = () => request('/api/dev/audit')
 
 export const adminGetRegions = () => request('/api/admin/regions')
 export const adminGetCities = () => request('/api/admin/cities')
@@ -239,3 +321,12 @@ export const createAdminNurse = (body) => adminMutation('/api/admin/nurses', 'PO
 export const updateAdminNurse = (id, body) => adminMutation(`/api/admin/nurses/${id}`, 'PUT', body)
 export const getAdminDoctorSchedule = (id) => request(`/api/admin/doctors/${id}/schedule`)
 export const updateAdminDoctorSchedule = (id, body) => adminMutation(`/api/admin/doctors/${id}/schedule`, 'PUT', body)
+export const adminGetDocumentTemplates = () => request('/api/admin/document-templates')
+export const adminCreateDocumentTemplate = (body) => adminMutation('/api/admin/document-templates', 'POST', body)
+export const adminGetTemplateVersions = (id) => request(`/api/admin/document-templates/${id}/versions`)
+export const adminAddTemplateVersion = (id, body) => adminMutation(`/api/admin/document-templates/${id}/versions`, 'POST', body)
+export const adminSetTemplateActive = (id, active) => request(`/api/admin/document-templates/${id}/active?value=${active}`, { method: 'PATCH' })
+export const adminImportIcd10 = (file, source, sourceVersion) => {
+  const body = new FormData(); body.append('file', file); body.append('source', source); body.append('sourceVersion', sourceVersion)
+  return request('/api/admin/icd10/import', { method: 'POST', body })
+}

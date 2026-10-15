@@ -145,6 +145,12 @@ class AuthSecurityIntegrationTest {
         mockMvc.perform(get("/api/doctor/test").header("Authorization", "Bearer " + patientToken))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.status").value(403));
+        mockMvc.perform(get("/api/nurse/test").header("Authorization", "Bearer " + patientToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403));
+        mockMvc.perform(get("/api/admin/test").header("Authorization", "Bearer " + patientToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403));
 
         createUser("+77001234569", Role.DOCTOR);
         String doctorToken = login("+77001234569", "Password123!");
@@ -176,6 +182,17 @@ class AuthSecurityIntegrationTest {
                                 """))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.message").value("Неверный номер телефона или пароль"));
+    }
+
+    @Test
+    void rejectsUnconfiguredLanOriginBeforeLogin() throws Exception {
+        registerPatient();
+
+        mockMvc.perform(post("/api/auth/login")
+                        .header("Origin", "http://192.168.1.140:5173")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"phone\":\"+77001234567\",\"password\":\"Password123!\"}"))
+                .andExpect(status().isForbidden());
     }
 
     private void registerPatient() throws Exception {

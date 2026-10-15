@@ -4,12 +4,14 @@ import com.qamqormed.entity.City;
 import com.qamqormed.entity.Clinic;
 import com.qamqormed.entity.Dependent;
 import com.qamqormed.entity.DoctorProfile;
+import com.qamqormed.entity.DoctorNurseAssignment;
 import com.qamqormed.entity.Appointment;
 import com.qamqormed.entity.MedicalRecord;
 import com.qamqormed.entity.Region;
 import com.qamqormed.entity.Role;
 import com.qamqormed.entity.Specialty;
 import com.qamqormed.entity.User;
+import com.qamqormed.entity.NurseProfile;
 import com.qamqormed.repository.AppointmentRepository;
 import com.qamqormed.repository.DependentRepository;
 import com.qamqormed.repository.DoctorProfileRepository;
@@ -24,6 +26,9 @@ import com.qamqormed.repository.MedicationPrescriptionRepository;
 import com.qamqormed.repository.LabResultRepository;
 import com.qamqormed.repository.MedicalCertificateRepository;
 import com.qamqormed.repository.UserRepository;
+import com.qamqormed.repository.NotificationRepository;
+import com.qamqormed.repository.DoctorNurseAssignmentRepository;
+import com.qamqormed.repository.NurseProfileRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -68,9 +73,13 @@ class FamilyPatientIntegrationTest {
     @Autowired MedicationPrescriptionRepository medicationPrescriptions;
     @Autowired LabResultRepository labResults;
     @Autowired MedicalCertificateRepository certificates;
+    @Autowired NotificationRepository notifications;
+    @Autowired NurseProfileRepository nurses;
+    @Autowired DoctorNurseAssignmentRepository assignments;
 
     @BeforeEach
     void clean() {
+        notifications.deleteAll();
         documents.deleteAll();
         referrals.deleteAll();
         treatments.deleteAll();
@@ -82,10 +91,68 @@ class FamilyPatientIntegrationTest {
         visits.deleteAll();
         records.deleteAll();
         appointments.deleteAll();
+        assignments.deleteAll();
         timeSlots.deleteAll();
         dependents.deleteAll();
+        nurses.deleteAll();
         doctors.deleteAll();
         users.deleteAll();
+        clinics.deleteAll();
+        cities.deleteAll();
+        specialties.deleteAll();
+        regions.deleteAll();
+    }
+
+    @Test
+    void bookingIsAtomicCreatesNotificationAndAppearsInBothStaffSchedules() throws Exception {
+        User patient = user("+77000000211", "Алия", "Пациент", Role.PATIENT);
+        User doctorUser = user("+77000000212", "Айдар", "Врач", Role.DOCTOR);
+        User nurseUser = user("+77000000213", "Айша", "Медсестра", Role.NURSE);
+        DoctorProfile doctor = doctor(doctorUser);
+        NurseProfile nurse = new NurseProfile();
+        nurse.setUser(nurseUser);
+        nurse.setClinic(doctor.getClinic());
+        nurses.save(nurse);
+        DoctorNurseAssignment assignment = new DoctorNurseAssignment();
+        assignment.setDoctor(doctor);
+        assignment.setNurse(nurse);
+        assignments.save(assignment);
+
+        String patientToken = login(patient.getPhone());
+        String doctorToken = login(doctorUser.getPhone());
+        String nurseToken = login(nurseUser.getPhone());
+        String appointmentAt = LocalDateTime.now().plusDays(5).withSecond(0).withNano(0).toString();
+        String payload = "{\"doctorId\":" + doctor.getId() + ",\"appointmentAt\":\"" + appointmentAt + "\"}";
+
+        mockMvc.perform(post("/api/patient/appointments")
+                        .header("Authorization", "Bearer " + patientToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.subject.type").value("SELF"))
+                .andExpect(jsonPath("$.confirmationStatus").value("PENDING"));
+
+        org.junit.jupiter.api.Assertions.assertEquals(1, appointments.count());
+        org.junit.jupiter.api.Assertions.assertEquals(1,
+                notifications.findAllByUserIdOrderByCreatedAtDesc(patient.getId()).size());
+        mockMvc.perform(get("/api/patient/appointments").header("Authorization", "Bearer " + patientToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(1)));
+        mockMvc.perform(get("/api/doctor/appointments").header("Authorization", "Bearer " + doctorToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(1)));
+        mockMvc.perform(get("/api/nurse/appointments").header("Authorization", "Bearer " + nurseToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].subject.type").value("SELF"));
+
+        mockMvc.perform(post("/api/patient/appointments")
+                        .header("Authorization", "Bearer " + patientToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Выбранное время уже занято. Выберите другое."));
+
+        org.junit.jupiter.api.Assertions.assertEquals(1, appointments.count());
+        org.junit.jupiter.api.Assertions.assertEquals(1,
+                notifications.findAllByUserIdOrderByCreatedAtDesc(patient.getId()).size());
     }
 
     @Test

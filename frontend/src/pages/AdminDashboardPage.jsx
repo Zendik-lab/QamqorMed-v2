@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { adminGetCities, adminGetClinics, adminGetDoctorsPage, adminGetNursesPage, adminGetRegions, adminGetSpecialties, createAdminCity, createAdminClinic, createAdminDoctor, createAdminNurse, createAdminRegion, createAdminSpecialty, updateAdminCity, updateAdminClinic, updateAdminDoctor, updateAdminNurse, updateAdminRegion, updateAdminSpecialty } from '../api/apiClient.js'
+import { adminGetCities, adminGetClinics, adminGetDoctorsPage, adminGetNursesPage, adminGetRegions, adminGetSpecialties, createAdminCity, createAdminClinic, createAdminDoctor, createAdminNurse, createAdminRegion, createAdminSpecialty, getAdminAppointmentStatistics, updateAdminCity, updateAdminClinic, updateAdminDoctor, updateAdminNurse, updateAdminRegion, updateAdminSpecialty } from '../api/apiClient.js'
 import { translateError, useTranslation } from '../i18n/index.jsx'
 
 const STAFF_PAGE_SIZE = 20
@@ -10,6 +10,7 @@ function AdminDashboardPage({ section = null }) {
   const { t } = useTranslation()
   const [data, setData] = useState({ regions: [], cities: [], clinics: [], specialties: [] })
   const [staff, setStaff] = useState({ doctors: emptyPage, nurses: emptyPage })
+  const [statistics, setStatistics] = useState(null)
   const [staffFilters, setStaffFilters] = useState({ doctors: { search: '', regionId: '', cityId: '', clinicId: '', specialtyId: '' }, nurses: { search: '', regionId: '', cityId: '', clinicId: '', doctorId: '' } })
   const [forms, setForms] = useState(blank)
   const [editing, setEditing] = useState({})
@@ -18,9 +19,10 @@ function AdminDashboardPage({ section = null }) {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
-  const load = () => Promise.all([adminGetRegions(), adminGetCities(), adminGetClinics(), adminGetSpecialties(), adminGetDoctorsPage({ page: 0, size: STAFF_PAGE_SIZE }), adminGetNursesPage({ page: 0, size: STAFF_PAGE_SIZE })]).then(([regions, cities, clinics, specialties, doctors, nurses]) => {
+  const load = () => Promise.all([adminGetRegions(), adminGetCities(), adminGetClinics(), adminGetSpecialties(), adminGetDoctorsPage({ page: 0, size: STAFF_PAGE_SIZE }), adminGetNursesPage({ page: 0, size: STAFF_PAGE_SIZE }), getAdminAppointmentStatistics()]).then(([regions, cities, clinics, specialties, doctors, nurses, stats]) => {
     setData({ regions, cities, clinics, specialties })
     setStaff({ doctors, nurses })
+    setStatistics(stats)
   })
 
   const loadStaff = (kind, page = 0) => {
@@ -51,6 +53,7 @@ function AdminDashboardPage({ section = null }) {
   const show = (name) => !section || section === name
 
   return <section className="page-shell admin-page"><div className="page-heading"><div className="eyebrow">{t('admin.onlyAdmin')}</div><h1>{section ? t(`nav.${section}`) : t('admin.title')}</h1><p className="form-description">{t('admin.description')}</p></div>{message && <p className="success-message">{message}</p>}{error && <p className="error-message" role="alert">{error}</p>}
+    {!section && statistics && <section className="admin-stat-grid"><AdminStat label={t('adminStats.total')} value={statistics.total} /><AdminStat label={t('adminStats.completed')} value={statistics.completed} /><AdminStat label={t('adminStats.cancelled')} value={statistics.cancelled} /><AdminStat label={t('adminStats.noShow')} value={`${statistics.noShow} · ${statistics.noShowRate}%`} /><AdminStat label={t('adminStats.confirmed')} value={statistics.confirmed} /><AdminStat label={t('adminStats.pending')} value={statistics.pendingConfirmation} /></section>}
     {show('regions') && <AdminSection title={t('nav.regions')} description={t('admin.structure', { parent: 'KZ', child: t('nav.regions').toLowerCase() })} kind="regions" options={data} form={forms.regions} editing={editing.regions} saving={saving === 'regions'} setField={setField} cancel={cancel} onSubmit={(event) => { event.preventDefault(); save('regions', () => editing.regions ? updateAdminRegion(editing.regions, { ...forms.regions, active: forms.regions.active !== false }) : createAdminRegion(forms.regions)) }}><div className="admin-table">{data.regions.map((item) => <div className="admin-row" key={item.id}><span><strong>{item.name}</strong><small>{item.code}</small></span><Status active={item.active} /><button className="text-button" onClick={() => edit('regions', item)}>{t('common.edit')}</button></div>)}</div></AdminSection>}
     {show('cities') && <AdminSection title={t('nav.cities')} description={t('admin.structure', { parent: t('nav.regions'), child: t('nav.cities').toLowerCase() })} kind="cities" options={data} form={forms.cities} editing={editing.cities} saving={saving === 'cities'} setField={setField} cancel={cancel} onSubmit={(event) => { event.preventDefault(); save('cities', () => editing.cities ? updateAdminCity(editing.cities, { ...forms.cities, active: forms.cities.active !== false, regionId: Number(forms.cities.regionId) }) : createAdminCity({ ...forms.cities, regionId: Number(forms.cities.regionId) })) }}><div className="admin-table">{data.cities.map((item) => <div className="admin-row" key={item.id}><span><strong>{item.name}</strong><small>{item.regionName}</small></span><Status active={item.active} /><button className="text-button" onClick={() => edit('cities', item)}>{t('common.edit')}</button></div>)}</div></AdminSection>}
     {show('clinics') && <AdminSection title={t('nav.clinics')} description={t('admin.structure', { parent: t('nav.cities'), child: t('nav.clinics').toLowerCase() })} kind="clinics" options={data} form={forms.clinics} editing={editing.clinics} saving={saving === 'clinics'} setField={setField} cancel={cancel} onSubmit={(event) => { event.preventDefault(); save('clinics', () => editing.clinics ? updateAdminClinic(editing.clinics, { ...forms.clinics, active: forms.clinics.active !== false, cityId: Number(forms.clinics.cityId) }) : createAdminClinic({ ...forms.clinics, cityId: Number(forms.clinics.cityId) })) }}><div className="admin-table">{data.clinics.map((item) => <div className="admin-row" key={item.id}><span><strong>{item.name}</strong><small>{item.cityName}, {item.regionName}</small></span><Status active={item.active} /><button className="text-button" onClick={() => edit('clinics', item)}>{t('common.edit')}</button></div>)}</div></AdminSection>}
@@ -76,6 +79,7 @@ function CheckField({ label, checked, onChange }) { return <label className="che
 function Select({ label, value, onChange, options = [], optionLabel = (item) => item.name, ...props }) { const { t } = useTranslation(); return <label className="field-group"><span className="field-label">{label}</span><select value={value ?? ''} onChange={onChange} {...props}><option value="">{t('admin.choose')}</option>{options.map((item) => <option value={item.id} key={item.id}>{optionLabel(item)}</option>)}</select></label> }
 function Actions({ editing, saving, cancel }) { const { t } = useTranslation(); return <div className="form-actions"><button className="button" type="submit" disabled={saving}>{saving ? t('admin.saving') : editing ? t('admin.saveAction') : t('admin.addAction')}</button>{editing && <button className="button button--secondary" type="button" onClick={cancel}>{t('common.cancel')}</button>}</div> }
 function Status({ active }) { const { t } = useTranslation(); return <span className={`status-badge ${active ? 'status-badge--active' : ''}`}>{active ? t('common.active') : t('common.inactive')}</span> }
+function AdminStat({ label, value }) { return <article className="admin-stat-card"><span>{label}</span><strong>{value}</strong></article> }
 function formFrom(kind, item) {
   if (kind === 'regions') return { name: item.name, code: item.code, active: item.active }
   if (kind === 'cities') return { name: item.name, regionId: item.regionId, active: item.active }

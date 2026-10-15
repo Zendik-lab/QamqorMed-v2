@@ -30,4 +30,10 @@ class HealthControllerTest {
                         }
                         """));
     }
+
+    @Test
+    void rejectsUnconfiguredLanOriginWhenCallingBackendDirectly() throws Exception {
+        mockMvc.perform(get("/api/health").header("Origin", "http://192.168.1.140:5173"))
+                .andExpect(status().isForbidden());
+    }
 }

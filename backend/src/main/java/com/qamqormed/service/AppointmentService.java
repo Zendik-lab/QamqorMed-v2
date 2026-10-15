@@ -9,6 +9,7 @@ import com.qamqormed.entity.User;
 import com.qamqormed.entity.AppointmentStatus;
 import com.qamqormed.entity.TimeSlot;
 import com.qamqormed.exception.BadRequestException;
+import com.qamqormed.exception.ConflictException;
 import com.qamqormed.exception.NotFoundException;
 import com.qamqormed.repository.AppointmentRepository;
 import com.qamqormed.repository.DoctorProfileRepository;
@@ -30,10 +31,14 @@ public class AppointmentService {
     private final PatientService patients;
     private final TimeSlotService timeSlots;
     private final ApplicationEventPublisher events;
+    private final NotificationService notifications;
+    private final AppointmentStatusHistoryService statusHistory;
 
     public AppointmentService(AppointmentRepository appointments, DoctorProfileRepository doctors, UserRepository users,
-                               PatientService patients, TimeSlotService timeSlots, ApplicationEventPublisher events) {
+                               PatientService patients, TimeSlotService timeSlots, ApplicationEventPublisher events,
+                               NotificationService notifications, AppointmentStatusHistoryService statusHistory) {
         this.appointments = appointments; this.doctors = doctors; this.users = users; this.patients = patients; this.timeSlots = timeSlots; this.events = events;
+        this.notifications = notifications; this.statusHistory = statusHistory;
     }
 
     @Transactional(readOnly = true)
@@ -70,7 +75,7 @@ public class AppointmentService {
                 : timeSlots.slotForDoctor(request.timeSlotId(), doctor.getId());
         if (!slot.getStartsAt().equals(request.appointmentAt())) throw new BadRequestException("Время не совпадает со свободным слотом");
         if (appointments.existsByDoctorIdAndAppointmentAtAndStatusNot(doctor.getId(), request.appointmentAt(), AppointmentStatus.CANCELLED)) {
-            throw new BadRequestException("Это время уже занято. Выберите другое.");
+            throw new ConflictException("Выбранное время уже занято. Выберите другое.");
         }
         Appointment appointment = new Appointment();
         appointment.setBookedBy(owner);
@@ -84,7 +89,10 @@ public class AppointmentService {
         appointment.setAppointmentAt(request.appointmentAt());
         appointment.setNote(trimToNull(request.note()));
         appointment.setStatus(AppointmentStatus.BOOKED);
-        return AppointmentResponse.from(appointments.save(appointment));
+        appointment.setConfirmationStatus(com.qamqormed.entity.AppointmentConfirmationStatus.PENDING);
+        Appointment saved = appointments.save(appointment);
+        notifications.appointmentCreated(saved);
+        return AppointmentResponse.from(saved);
     }
 
     private void validateBookingFilters(DoctorProfile doctor, AppointmentCreateRequest request) {
@@ -108,11 +116,46 @@ public class AppointmentService {
         if (current != AppointmentStatus.BOOKED && current != AppointmentStatus.CONFIRMED && current != AppointmentStatus.ARRIVED) {
             throw new BadRequestException("На этом этапе запись уже нельзя отменить");
         }
+        AppointmentStatus old = appointment.getCanonicalStatus();
         appointment.setStatus(AppointmentStatus.CANCELLED);
         appointment.setCancelledAt(java.time.Instant.now());
         appointment.setCancelledBy(appointment.getBookedBy());
         appointment.setCancellationReason(trimToNull(reason));
         appointments.save(appointment);
+        statusHistory.record(appointment, old, AppointmentStatus.CANCELLED, appointment.getBookedBy(), reason);
+        notifications.appointmentCancelled(appointment);
+        events.publishEvent(new com.qamqormed.event.AppointmentCancelled(appointment.getId(), appointment.getDoctor().getId(), java.time.Instant.now()));
+    }
+
+    @Transactional
+    public AppointmentResponse confirmForPatient(Long userId, Long appointmentId) {
+        Appointment appointment = appointments.findByIdAndBookedById(appointmentId, userId)
+                .orElseThrow(() -> new NotFoundException("Запись не найдена"));
+        if (appointment.getCanonicalStatus() == AppointmentStatus.CANCELLED || appointment.getCanonicalStatus() == AppointmentStatus.COMPLETED || appointment.getCanonicalStatus() == AppointmentStatus.NO_SHOW) {
+            throw new BadRequestException("Эту запись нельзя подтвердить");
+        }
+        appointment.setConfirmationStatus(com.qamqormed.entity.AppointmentConfirmationStatus.CONFIRMED);
+        appointment.setConfirmedAt(java.time.Instant.now());
+        Appointment saved = appointments.save(appointment);
+        notifications.appointmentConfirmed(saved);
+        return AppointmentResponse.from(saved);
+    }
+
+    @Transactional
+    public void declineForPatient(Long userId, Long appointmentId) {
+        Appointment appointment = appointments.findByIdAndBookedById(appointmentId, userId)
+                .orElseThrow(() -> new NotFoundException("Запись не найдена"));
+        if (appointment.getCanonicalStatus() != AppointmentStatus.BOOKED && appointment.getCanonicalStatus() != AppointmentStatus.CONFIRMED) {
+            throw new BadRequestException("На этом этапе запись уже нельзя отменить");
+        }
+        AppointmentStatus old = appointment.getCanonicalStatus();
+        appointment.setConfirmationStatus(com.qamqormed.entity.AppointmentConfirmationStatus.DECLINED);
+        appointment.setStatus(AppointmentStatus.CANCELLED);
+        appointment.setCancelledAt(java.time.Instant.now()); appointment.setCancelledBy(appointment.getBookedBy());
+        appointment.setCancellationReason("Пациент не сможет прийти");
+        appointments.save(appointment);
+        statusHistory.record(appointment, old, AppointmentStatus.CANCELLED, appointment.getBookedBy(), appointment.getCancellationReason());
+        notifications.appointmentCancelled(appointment);
         events.publishEvent(new com.qamqormed.event.AppointmentCancelled(appointment.getId(), appointment.getDoctor().getId(), java.time.Instant.now()));
     }
 

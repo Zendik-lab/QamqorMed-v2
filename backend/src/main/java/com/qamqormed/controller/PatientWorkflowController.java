@@ -12,11 +12,13 @@ import com.qamqormed.dto.MedicationPrescriptionResponse;
 import com.qamqormed.dto.PrescriptionResponse;
 import com.qamqormed.dto.ReferralResponse;
 import com.qamqormed.dto.VisitDiagnosisResponse;
+import com.qamqormed.dto.AttendanceResponse;
 import com.qamqormed.security.AuthenticatedUser;
 import com.qamqormed.service.AppointmentService;
 import com.qamqormed.service.ClinicalWorkflowService;
 import com.qamqormed.service.PatientService;
 import com.qamqormed.service.MedicalHistoryService;
+import com.qamqormed.service.AttendanceService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -32,13 +34,20 @@ public class PatientWorkflowController {
     private final AppointmentService appointments;
     private final ClinicalWorkflowService workflow;
     private final MedicalHistoryService history;
+    private final AttendanceService attendance;
 
     public PatientWorkflowController(PatientService patients, AppointmentService appointments,
-                                      ClinicalWorkflowService workflow, MedicalHistoryService history) {
+                                      ClinicalWorkflowService workflow, MedicalHistoryService history, AttendanceService attendance) {
         this.patients = patients;
         this.appointments = appointments;
         this.workflow = workflow;
         this.history = history;
+        this.attendance = attendance;
+    }
+
+    @GetMapping("/api/patients/{patientId}/attendance")
+    public AttendanceResponse attendance(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long patientId) {
+        return attendance.forSubject(principal.getId(), patientId);
     }
 
     @GetMapping("/api/patient-profiles")
@@ -146,6 +155,19 @@ public class PatientWorkflowController {
     public MedicalDocumentResponse document(@AuthenticationPrincipal AuthenticatedUser principal,
                                             @PathVariable Long patientId, @PathVariable Long documentId) {
         return history.document(principal.getId(), patientId, documentId);
+    }
+
+    @GetMapping("/api/patient/documents/{documentId}")
+    public MedicalDocumentResponse ownDocument(@AuthenticationPrincipal AuthenticatedUser principal,
+                                               @PathVariable Long documentId,
+                                               @RequestParam(required = false) Long subjectId) {
+        return history.document(principal.getId(), subjectId, documentId);
+    }
+
+    @GetMapping("/api/patients/{patientId}/visits/{visitId}/documents")
+    public List<MedicalDocumentResponse> visitDocuments(@AuthenticationPrincipal AuthenticatedUser principal,
+                                                         @PathVariable Long patientId, @PathVariable Long visitId) {
+        return history.visitDocuments(principal.getId(), patientId, visitId);
     }
 
     @GetMapping("/api/appointments/{appointmentId}/result")

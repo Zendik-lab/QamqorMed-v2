@@ -9,6 +9,7 @@ public record NurseIntakeResponse(
         Long id,
         Long appointmentId,
         MedicalSubjectDto subject,
+        String nurseName,
         BigDecimal temperature,
         String bloodPressure,
         Integer bloodPressureSystolic,
@@ -28,6 +29,7 @@ public record NurseIntakeResponse(
         return new NurseIntakeResponse(intake.getId(), appointment.getId(),
                 appointment.getDependent() != null ? MedicalSubjectDto.dependent(appointment.getDependent())
                         : appointment.getPatientProfile() != null ? MedicalSubjectDto.self(appointment.getPatientProfile()) : MedicalSubjectDto.self(appointment.getBookedBy()),
+                intake.getNurseUser() == null ? null : String.join(" ", intake.getNurseUser().getLastName(), intake.getNurseUser().getFirstName(), intake.getNurseUser().getMiddleName() == null ? "" : intake.getNurseUser().getMiddleName()).trim().replaceAll(" +", " "),
                 intake.getTemperature(), intake.getBloodPressure(), intake.getBloodPressureSystolic(), intake.getBloodPressureDiastolic(),
                 intake.getPulse(), intake.getOxygenSaturation(), intake.getWeight(), intake.getHeight(), intake.getComplaintSummary(),
                 intake.getNurseNotes(), intake.getNotes(), intake.getCreatedAt(), intake.getUpdatedAt());

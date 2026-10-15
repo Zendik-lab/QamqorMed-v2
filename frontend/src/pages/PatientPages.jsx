@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   cancelPatientAppointment,
+  confirmPatientAppointment,
+  declinePatientAppointment,
   createDependent,
   createPatientAppointment,
   deleteDependent,
@@ -13,15 +15,18 @@ import {
   getLocationRegions,
   getPatientLocation,
   getPatientAppointments,
+  getPatientProfile,
+  getAttendance,
   getPatientMedicalRecords,
   getPatientDiagnoses,
   getPatientPrescriptions,
   getPatientMedications,
   getPatientLabResults,
   getPatientCertificates,
+  getPatientDocument,
   getPatientDocuments,
+  downloadPatientDocumentPdf,
   getPatientMedicalHistory,
-  getPatientProfile,
   getPatientReferrals,
   getPatientSubjectHistory,
   searchClinics,
@@ -419,22 +424,26 @@ export function PatientBookingPage() {
 
 export function PatientAppointmentsPage() {
   const { t, language } = useTranslation()
-  const [items, setItems] = useState([]); const [dependents, setDependents] = useState([]); const [filter, setFilter] = useState('ALL'); const [error, setError] = useState(''); const [loading, setLoading] = useState(true)
-  const load = () => Promise.all([getPatientAppointments(), getDependents()]).then(([appointments, family]) => { setItems(appointments); setDependents(family) }).catch((e) => setError(messageFor(e, t)))
+  const [items, setItems] = useState([]); const [dependents, setDependents] = useState([]); const [filter, setFilter] = useState('ALL'); const [error, setError] = useState(''); const [loading, setLoading] = useState(true); const [declineId, setDeclineId] = useState(null); const [attendance, setAttendance] = useState(null); const [busyId, setBusyId] = useState(null)
+  const load = () => Promise.all([getPatientAppointments(), getDependents(), getPatientProfile()]).then(([appointments, family, profile]) => { setItems(appointments); setDependents(family); return getAttendance(profile.id).then(setAttendance) }).catch((e) => setError(messageFor(e, t)))
   useEffect(() => { load().finally(() => setLoading(false)) }, [])
   const filtered = items.filter((item) => filter === 'ALL' || (filter === 'SELF' ? item.subject?.type === 'SELF' : String(item.subject?.id) === String(filter)))
   const cancel = async (id) => { try { await cancelPatientAppointment(id); await load() } catch (e) { setError(messageFor(e, t)) } }
+  const confirm = async (id) => { setBusyId(id); try { await confirmPatientAppointment(id); await load() } catch (e) { setError(messageFor(e, t)) } finally { setBusyId(null) } }
+  const decline = async () => { if (!declineId) return; setBusyId(declineId); try { await declinePatientAppointment(declineId); setDeclineId(null); await load() } catch (e) { setError(messageFor(e, t)) } finally { setBusyId(null) } }
   const upcoming = filtered.filter((item) => !['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(item.status))
   const finished = filtered.filter((item) => ['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(item.status))
   if (loading) return <section className="page-shell"><div className="page-heading"><div className="eyebrow">{t('patient.historyTab')}</div><h1>{t('patient.appointmentsTitle')}</h1></div><div className="patient-card patient-skeleton-card"><span className="skeleton skeleton--line" /><span className="skeleton skeleton--title" /><span className="skeleton skeleton--line" /><span className="skeleton skeleton--line" /></div></section>
-  return <section className="page-shell"><div className="page-heading page-heading--row"><div><div className="eyebrow">{t('patient.historyTab')}</div><h1>{t('patient.appointmentsTitle')}</h1><p className="form-description">{t('appointmentUi.description')}</p></div><button className="button button--compact" onClick={() => navigate('/patient/appointments')}>{t('appointmentUi.newAppointment')}</button></div><PageMessage error={error} />{!items.length && <EmptyAppointments onAction={() => navigate('/patient/appointments')} t={t} />}{items.length > 0 && <><div className="filter-pills"><button className={filter === 'ALL' ? 'is-active' : ''} onClick={() => setFilter('ALL')}>{t('common.all')}</button><button className={filter === 'SELF' ? 'is-active' : ''} onClick={() => setFilter('SELF')}>{t('appointmentUi.myFilter')}</button>{dependents.map((item) => <button className={String(filter) === String(item.id) ? 'is-active' : ''} onClick={() => setFilter(String(item.id))} key={item.id}>{item.firstName}</button>)}</div><AppointmentGroup title={t('patient.upcomingTab')} items={upcoming} cancel={cancel} emptyTitle={t('appointmentUi.noUpcoming')} t={t} language={language} /><AppointmentGroup title={t('patient.historyTab')} items={finished} cancel={cancel} emptyTitle={t('appointmentUi.historyEmpty')} t={t} language={language} /></>}</section>
+  return <><section className="page-shell"><div className="page-heading page-heading--row"><div><div className="eyebrow">{t('patient.historyTab')}</div><h1>{t('patient.appointmentsTitle')}</h1><p className="form-description">{t('appointmentUi.description')}</p></div><button className="button button--compact" onClick={() => navigate('/patient/appointments')}>{t('appointmentUi.newAppointment')}</button></div><PageMessage error={error} />{attendance && <div className="attendance-card"><div><span className="eyebrow">{t('attendance.title')}</span><strong>{attendance.attendanceRate}%</strong></div><p>{t('attendance.completed')}: <b>{attendance.completedAppointments}</b> · {t('attendance.noShow')}: <b>{attendance.noShowAppointments}</b> · {t('attendance.cancelled')}: <b>{attendance.cancelledAppointments}</b></p></div>}{!items.length && <EmptyAppointments onAction={() => navigate('/patient/appointments')} t={t} />}{items.length > 0 && <><div className="filter-pills"><button className={filter === 'ALL' ? 'is-active' : ''} onClick={() => setFilter('ALL')}>{t('common.all')}</button><button className={filter === 'SELF' ? 'is-active' : ''} onClick={() => setFilter('SELF')}>{t('appointmentUi.myFilter')}</button>{dependents.map((item) => <button className={String(filter) === String(item.id) ? 'is-active' : ''} onClick={() => setFilter(String(item.id))} key={item.id}>{item.firstName}</button>)}</div><AppointmentGroup title={t('patient.upcomingTab')} items={upcoming} cancel={cancel} confirm={confirm} requestDecline={setDeclineId} busyId={busyId} emptyTitle={t('appointmentUi.noUpcoming')} t={t} language={language} /><AppointmentGroup title={t('patient.historyTab')} items={finished} cancel={cancel} emptyTitle={t('appointmentUi.historyEmpty')} t={t} language={language} /></>}</section>
+    {declineId && <div className="modal-backdrop" role="presentation"><section className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="decline-title"><h2 id="decline-title">{t('confirmation.declineTitle')}</h2><p>{t('confirmation.declineDescription')}</p><div className="form-actions"><button className="button button--secondary" type="button" onClick={() => setDeclineId(null)}>{t('common.cancel')}</button><button className="button button--danger" type="button" disabled={busyId === declineId} onClick={decline}>{t('confirmation.decline')}</button></div></section></div>}
+  </>;
 }
 
-function AppointmentGroup({ title, items, cancel, emptyTitle, t, language }) { return <section className="records-section"><div className="section-heading"><h2>{title}</h2></div><div className="appointments-list">{items.length ? items.map((item) => <article className="appointment-card" key={item.id}><AppointmentRow item={item} detailed t={t} language={language} /><div className="appointment-card__actions"><span className={`status status--${String(item.status).toLowerCase()}`}><span>{statusLabel(item.status, t)}</span></span>{!['CANCELLED', 'COMPLETED', 'NO_SHOW'].includes(item.status) && <button className="text-button text-button--danger" onClick={() => { if (window.confirm(t('patient.cancelConfirm'))) cancel(item.id) }}>{t('patient.cancelAppointment')}</button>}</div></article>) : <div className="empty-state empty-state--inline"><p>{emptyTitle || t('patient.noAppointmentsSection')}</p></div>}</div></section> }
+function AppointmentGroup({ title, items, cancel, confirm, requestDecline, busyId, emptyTitle, t, language }) { return <section className="records-section"><div className="section-heading"><h2>{title}</h2></div><div className="appointments-list">{items.length ? items.map((item) => <article className="appointment-card" key={item.id}><AppointmentRow item={item} detailed t={t} language={language} /><div className="appointment-card__actions"><span className={`status status--${String(item.status).toLowerCase()}`}><span>{statusLabel(item.status, t)}</span></span>{confirm && item.confirmationStatus === 'PENDING' && !['CANCELLED', 'COMPLETED', 'NO_SHOW'].includes(item.status) && <div className="appointment-confirmation-card"><strong>{t('confirmation.question')}</strong><div className="form-actions"><button className="button button--compact" type="button" disabled={busyId === item.id} onClick={() => confirm(item.id)}>{t('confirmation.confirm')}</button><button className="button button--secondary button--compact" type="button" disabled={busyId === item.id} onClick={() => requestDecline(item.id)}>{t('confirmation.decline')}</button></div></div>}{!['CANCELLED', 'COMPLETED', 'NO_SHOW'].includes(item.status) && <button className="text-button text-button--danger" onClick={() => { if (window.confirm(t('patient.cancelConfirm'))) cancel(item.id) }}>{t('patient.cancelAppointment')}</button>}</div></article>) : <div className="empty-state empty-state--inline"><p>{emptyTitle || t('patient.noAppointmentsSection')}</p></div>}</div></section> }
 function EmptyAppointments({ onAction, t }) { return <div className="empty-state patient-empty-state"><span className="patient-empty-state__icon">◷</span><h2>{t('patient.noAppointmentsTitle')}</h2><p>{t('patient.noAppointmentsDescription')}</p><button className="button button--secondary button--compact" type="button" onClick={onAction}>{t('patient.bookForDoctor')}</button></div> }
 
 function MedicalTabs({ active, t }) {
-  const tabs = [['overview', 'patient.overview', '/patient/medical-record'], ['history', 'patient.historyTab', '/patient/medical-history'], ['diagnoses', 'patient.diagnoses', '/patient/diagnoses'], ['prescriptions', 'patient.prescriptions', '/patient/prescriptions'], ['labs', 'patient.labs', '/patient/lab-results'], ['referrals', 'patient.referrals', '/patient/referrals'], ['certificates', 'patient.certificates', '/patient/certificates'], ['documents', 'patient.documents', '/patient/documents']]
+  const tabs = [['overview', 'patient.overview', '/patient/medical-record'], ['history', 'patient.historyTab', '/patient/medical-history'], ['documents', 'patient.documents', '/patient/documents']]
   return <nav className="medical-tabs" aria-label={t('patient.medicalCard')}>{tabs.map(([key, label, path]) => <button type="button" className={active === key ? 'is-active' : ''} onClick={() => navigate(path)} key={key}>{t(label)}</button>)}</nav>
 }
 
@@ -449,6 +458,10 @@ export function PatientClinicalDataPage({ kind = 'diagnoses' }) {
   const [dependents, setDependents] = useState([])
   const [selected, setSelected] = useState('SELF')
   const [items, setItems] = useState([])
+  const [documentType, setDocumentType] = useState('ALL')
+  const [documentFrom, setDocumentFrom] = useState('')
+  const [documentTo, setDocumentTo] = useState('')
+  const [selectedDocument, setSelectedDocument] = useState(null)
   const [error, setError] = useState(''); const [loading, setLoading] = useState(true)
   const loaders = { diagnoses: getPatientDiagnoses, prescriptions: getPatientPrescriptions, medications: getPatientMedications, labs: getPatientLabResults, referrals: getPatientReferrals, certificates: getPatientCertificates, documents: getPatientDocuments }
   const titles = { diagnoses: 'patient.diagnoses', prescriptions: 'patient.prescriptions', medications: 'patient.medications', labs: 'patient.labs', referrals: 'patient.referrals', certificates: 'patient.certificates', documents: 'patient.documents' }
@@ -459,7 +472,7 @@ export function PatientClinicalDataPage({ kind = 'diagnoses' }) {
   useEffect(() => {
     if (!profile) return
     const subjectId = selected === 'SELF' ? null : selected
-    setLoading(true)
+    setLoading(true); setError(''); setItems([]); setSelectedDocument(null)
     const load = (loaders[kind] || loaders.diagnoses)(subjectId)
     load.then(setItems).catch((e) => setError(messageFor(e, t))).finally(() => setLoading(false))
   }, [profile, selected, kind, t])
@@ -467,17 +480,218 @@ export function PatientClinicalDataPage({ kind = 'diagnoses' }) {
   if (!profile) return <section className="page-shell"><p>{t('patient.loadingMedical')}</p><PageMessage error={error} /></section>
   const subjectName = selected === 'SELF' ? fullName(profile) : dependents.find((item) => String(item.id) === String(selected))?.fullName
   const emptyCopy = { diagnoses: ['medicalUi.noDiagnoses', 'medicalUi.noDiagnosesDescription'], prescriptions: ['medicalUi.noPrescriptions', 'medicalUi.noPrescriptionsDescription'], medications: ['medicalUi.noMedications', 'medicalUi.noMedicationsDescription'], labs: ['medicalUi.noLabs', 'medicalUi.noLabsDescription'], referrals: ['medicalUi.noReferrals', 'medicalUi.noReferralsDescription'], certificates: ['medicalUi.noCertificates', 'medicalUi.noCertificatesDescription'], documents: ['medicalUi.noDocuments', 'medicalUi.noDocumentsDescription'] }[kind] || ['medicalUi.noData', 'medicalUi.noDataDescription']
-  return <section className="page-shell medical-record-page"><div className="page-heading"><div className="eyebrow">{t('patient.medicalCard')}</div><h1>{t(titles[kind] || titles.diagnoses)}</h1><p className="form-description">{t('patient.medicalCardDescription')}</p></div><MedicalTabs active={kind} t={t} /><PageMessage error={error} /><div className="subject-tabs"><button className={selected === 'SELF' ? 'is-active' : ''} onClick={() => setSelected('SELF')}>{fullName(profile) || t('patient.myself')}</button>{dependents.map((item) => <button className={String(selected) === String(item.id) ? 'is-active' : ''} onClick={() => setSelected(String(item.id))} key={item.id}>{item.firstName} · {item.relationshipLabel}</button>)}</div><SubjectContext name={subjectName} t={t} />{loading ? <MedicalSkeleton /> : items.length ? <div className="records-section">{items.map((item, index) => <ClinicalDataCard key={`${item.id || 'item'}-${index}`} item={item} kind={kind} t={t} language={language} />)}</div> : <EmptyMedicalState title={t(emptyCopy[0])} description={t(emptyCopy[1])} t={t} />}</section>
+  const visibleItems = kind === 'documents' ? items.filter((item) => {
+    const date = String(item.approvedAt || item.createdAt || '').slice(0, 10)
+    return (documentType === 'ALL' || item.type === documentType)
+      && (!documentFrom || date >= documentFrom)
+      && (!documentTo || date <= documentTo)
+  }) : items
+  const subjectId = selected === 'SELF' ? null : selected
+  const openDocument = async (item) => {
+    try { setError(''); setSelectedDocument(await getPatientDocument(item.id, subjectId)) }
+    catch (requestError) { setError(messageFor(requestError, t)) }
+  }
+  return <section className="page-shell medical-record-page"><div className="page-heading"><div className="eyebrow">{t('patient.medicalCard')}</div><h1>{t(titles[kind] || titles.diagnoses)}</h1><p className="form-description">{t('patient.medicalCardDescription')}</p></div><MedicalTabs active={kind} t={t} /><PageMessage error={error} /><div className="subject-tabs"><button className={selected === 'SELF' ? 'is-active' : ''} onClick={() => setSelected('SELF')}>{fullName(profile) || t('patient.myself')}</button>{dependents.map((item) => <button className={String(selected) === String(item.id) ? 'is-active' : ''} onClick={() => setSelected(String(item.id))} key={item.id}>{item.firstName} · {item.relationshipLabel}</button>)}</div><SubjectContext name={subjectName} t={t} />{kind === 'documents' && <div className="medical-filter-bar document-filter-bar"><label className="field-group"><span className="field-label">{t('patientDocuments.documentTypeFilter')}</span><select value={documentType} onChange={(event) => setDocumentType(event.target.value)}><option value="ALL">{t('patientDocuments.allDocumentTypes')}</option>{patientDocumentTypes.map((type) => <option value={type} key={type}>{documentTypeLabel(type, t)}</option>)}</select></label><label className="field-group"><span className="field-label">{t('patient.fromDate')}</span><input type="date" value={documentFrom} onChange={(event) => setDocumentFrom(event.target.value)} /></label><label className="field-group"><span className="field-label">{t('patient.toDate')}</span><input type="date" value={documentTo} onChange={(event) => setDocumentTo(event.target.value)} /></label></div>}{loading ? <MedicalSkeleton /> : error ? null : visibleItems.length ? <div className="records-section">{visibleItems.map((item, index) => <ClinicalDataCard key={`${item.id || 'item'}-${index}`} item={item} kind={kind} t={t} language={language} subjectId={subjectId} onViewDocument={openDocument} />)}</div> : <EmptyMedicalState title={t(emptyCopy[0])} description={t(emptyCopy[1])} t={t} />}{selectedDocument && <PatientDocumentViewer document={selectedDocument} subjectId={subjectId} t={t} language={language} onClose={() => setSelectedDocument(null)} />}</section>
 }
 
-function ClinicalDataCard({ item, kind, t, language }) {
+const patientDocumentCategories = ['ALL', 'PRESCRIPTIONS', 'LABS', 'REFERRALS', 'CERTIFICATES', 'CONCLUSIONS']
+
+function documentCategoryForType(type) {
+  if (type === 'PRESCRIPTION') return 'PRESCRIPTIONS'
+  if (['LAB_REQUEST', 'LAB_RESULT'].includes(type)) return 'LABS'
+  if (type === 'REFERRAL') return 'REFERRALS'
+  if (type === 'CERTIFICATE') return 'CERTIFICATES'
+  if (type === 'CONCLUSION') return 'CONCLUSIONS'
+  return 'ALL'
+}
+
+function recordDate(value) {
+  return value?.date || value?.approvedAt || value?.issuedAt || value?.testDate || value?.completedAt || value?.createdAt || value?.appointmentAt || ''
+}
+
+function recordDateKey(value) { return String(recordDate(value) || '').slice(0, 10) }
+function normalizeRecordText(value) { return String(value || '').trim().toLocaleLowerCase().replace(/\s+/g, ' ') }
+function visitForRecord(value, visits) { return visits.get(value?.medicalVisitId ?? value?.visitId) }
+
+function buildUnifiedPatientDocuments({ documents = [], prescriptions = [], medications = [], labs = [], referrals = [], certificates = [], history = {} }) {
+  const visits = new Map((history.visits || []).map((visit) => [visit.id, visit]))
+  const documentItems = documents.map((value) => {
+    const visit = visits.get(value.visitId)
+    return {
+      id: `document-${value.id}`, sourceId: value.id, category: documentCategoryForType(value.type), kind: 'DOCUMENT',
+      title: value.title || value.type, date: recordDate(value), visitId: value.visitId, visit,
+      doctorName: value.doctorName || visit?.doctor?.fullName, organization: value.clinicName || visit?.clinic?.name,
+      status: value.status, document: value, details: [value.description].filter(Boolean),
+    }
+  })
+  const structuredItems = [
+    ...prescriptions.map((value) => ({
+      id: `prescription-${value.id}`, sourceId: value.id, category: 'PRESCRIPTIONS', kind: 'PRESCRIPTION', title: value.title,
+      date: recordDate(value) || visitForRecord(value, visits)?.completedAt || visitForRecord(value, visits)?.appointmentAt,
+      visitId: value.medicalVisitId, visit: visitForRecord(value, visits), status: value.status,
+      details: [value.description, value.instructions, visitForRecord(value, visits)?.recommendations, value.startDate && `С ${value.startDate}`, value.endDate && `До ${value.endDate}`].filter(Boolean),
+    })),
+    ...medications.map((value) => ({
+      id: `medication-${value.id}`, sourceId: value.id, category: 'PRESCRIPTIONS', kind: 'MEDICATION', title: value.medicationName,
+      date: recordDate(value) || visitForRecord(value, visits)?.completedAt || visitForRecord(value, visits)?.appointmentAt,
+      visitId: value.medicalVisitId, visit: visitForRecord(value, visits), status: value.status,
+      details: [value.dosage && `${value.dosage}${value.dosageUnit ? ` ${value.dosageUnit}` : ''}`, value.frequency, value.route, value.duration || (value.durationDays && `${value.durationDays} дн.`), value.instructions, visitForRecord(value, visits)?.recommendations].filter(Boolean),
+    })),
+    ...labs.map((value) => ({
+      id: `lab-${value.id}`, sourceId: value.id, category: 'LABS', kind: 'LAB', title: value.testName,
+      date: recordDate(value) || visitForRecord(value, visits)?.completedAt || visitForRecord(value, visits)?.appointmentAt,
+      visitId: value.visitId, visit: visitForRecord(value, visits), status: value.status, doctorName: value.doctorName,
+      details: [value.result, value.referenceRange, value.comment, value.testCode].filter(Boolean),
+    })),
+    ...referrals.map((value) => ({
+      id: `referral-${value.id}`, sourceId: value.id, category: 'REFERRALS', kind: 'REFERRAL', title: value.referralType,
+      date: recordDate(value) || visitForRecord(value, visits)?.completedAt || visitForRecord(value, visits)?.appointmentAt,
+      visitId: value.medicalVisitId, visit: visitForRecord(value, visits), status: value.status,
+      organization: value.targetClinicName, doctorName: value.targetDoctorName,
+      details: [value.targetSpecialtyName, value.reason, value.notes, value.validUntil && `До ${value.validUntil}`].filter(Boolean),
+    })),
+    ...certificates.map((value) => ({
+      id: `certificate-${value.id}`, sourceId: value.id, category: 'CERTIFICATES', kind: 'CERTIFICATE', title: value.title || value.type,
+      date: recordDate(value), visitId: value.visitId, visit: visitForRecord(value, visits), status: value.status, doctorName: value.doctorName,
+      details: [value.documentNumber, value.description, value.validFrom && `С ${value.validFrom}`, value.validUntil && `До ${value.validUntil}`].filter(Boolean),
+    })),
+  ]
+
+  const consumedDocuments = new Set()
+  const linkedStructuredItems = structuredItems.map((item) => {
+    const candidates = documentItems.filter((document) => document.category === item.category && document.visitId && document.visitId === item.visitId && !consumedDocuments.has(document.sourceId))
+    const exact = candidates.find((document) => normalizeRecordText(document.title) === normalizeRecordText(item.title))
+    const linked = exact || (candidates.length === 1 ? candidates[0] : null)
+    if (linked) consumedDocuments.add(linked.sourceId)
+    return { ...item, document: linked?.document, doctorName: item.doctorName || linked?.doctorName || item.visit?.doctor?.fullName, organization: item.organization || linked?.organization || item.visit?.clinic?.name }
+  })
+
+  return [...documentItems.filter((item) => !consumedDocuments.has(item.sourceId)), ...linkedStructuredItems]
+}
+
+export function PatientDocumentsPage() {
+  const { t, language } = useTranslation()
+  const location = useLocation()
+  const queryCategory = (new URLSearchParams(location.search).get('category') || '').toUpperCase()
+  const [profile, setProfile] = useState(null)
+  const [dependents, setDependents] = useState([])
+  const [selected, setSelected] = useState('SELF')
+  const [category, setCategory] = useState(patientDocumentCategories.includes(queryCategory) ? queryCategory : 'ALL')
+  const [search, setSearch] = useState('')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
+  const [status, setStatus] = useState('ALL')
+  const [items, setItems] = useState([])
+  const [selectedDocument, setSelectedDocument] = useState(null)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (patientDocumentCategories.includes(queryCategory)) setCategory(queryCategory)
+  }, [queryCategory])
+
+  useEffect(() => {
+    Promise.all([getPatientProfile(), getDependents()])
+      .then(([patient, family]) => { setProfile(patient); setDependents(family) })
+      .catch((requestError) => setError(messageFor(requestError, t)))
+      .finally(() => setLoading(false))
+  }, [t])
+
+  useEffect(() => {
+    if (!profile) return
+    const subjectId = selected === 'SELF' ? null : selected
+    setLoading(true); setError(''); setSelectedDocument(null)
+    Promise.all([
+      getPatientDocuments(subjectId), getPatientPrescriptions(subjectId), getPatientMedications(subjectId),
+      getPatientLabResults(subjectId), getPatientReferrals(subjectId), getPatientCertificates(subjectId), getPatientMedicalHistory(subjectId),
+    ])
+      .then(([documents, prescriptions, medications, labs, referrals, certificates, history]) => setItems(buildUnifiedPatientDocuments({ documents, prescriptions, medications, labs, referrals, certificates, history })))
+      .catch((requestError) => { setItems([]); setError(messageFor(requestError, t)) })
+      .finally(() => setLoading(false))
+  }, [profile, selected, t])
+
+  const chooseCategory = (value) => {
+    setCategory(value)
+    const params = new URLSearchParams(location.search)
+    if (value === 'ALL') params.delete('category'); else params.set('category', value.toLowerCase())
+    const next = params.toString() ? `/patient/documents?${params}` : '/patient/documents'
+    navigate(next, { replace: true })
+  }
+
+  const statusOptions = [...new Set(items.map((item) => item.status).filter(Boolean))].sort()
+  const visibleItems = items.filter((item) => {
+    const haystack = [item.title, item.doctorName, item.organization, ...(item.details || [])].join(' ').toLocaleLowerCase()
+    const date = recordDateKey(item)
+    return (category === 'ALL' || item.category === category)
+      && (!search.trim() || haystack.includes(search.trim().toLocaleLowerCase()))
+      && (!fromDate || date >= fromDate) && (!toDate || date <= toDate)
+      && (status === 'ALL' || item.status === status)
+  }).sort((left, right) => String(recordDate(right) || '').localeCompare(String(recordDate(left) || '')))
+
+  if (!profile) return <section className="page-shell"><p>{t('patient.loadingMedical')}</p><PageMessage error={error} /></section>
+  const subjectId = selected === 'SELF' ? null : selected
+  const subjectName = selected === 'SELF' ? fullName(profile) : dependents.find((item) => String(item.id) === String(selected))?.fullName
+  return <section className="page-shell medical-record-page patient-documents-page">
+    <div className="page-heading"><div className="eyebrow">{t('patient.medicalCard')}</div><h1>{t('patient.documents')}</h1><p className="form-description">{t('patientDocuments.description')}</p></div>
+    <MedicalTabs active="documents" t={t} />
+    <PageMessage error={error} />
+    <div className="subject-tabs"><button className={selected === 'SELF' ? 'is-active' : ''} onClick={() => setSelected('SELF')}>{fullName(profile) || t('patient.myself')}</button>{dependents.map((item) => <button className={String(selected) === String(item.id) ? 'is-active' : ''} onClick={() => setSelected(String(item.id))} key={item.id}>{item.firstName} · {item.relationshipLabel}</button>)}</div>
+    <SubjectContext name={subjectName} t={t} />
+    <div className="document-category-tabs" role="tablist" aria-label={t('patient.documents')}>
+      {patientDocumentCategories.map((value) => <button type="button" role="tab" aria-selected={category === value} className={category === value ? 'is-active' : ''} onClick={() => chooseCategory(value)} key={value}><span aria-hidden="true">{documentCategoryIcon(value)}</span>{t(`patientDocuments.categories.${value}`)}</button>)}
+    </div>
+    <div className="medical-filter-bar patient-documents-filter"><label className="field-group"><span className="field-label">{t('patientDocuments.search')}</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t('patientDocuments.searchPlaceholder')} /></label><label className="field-group"><span className="field-label">{t('patientDocuments.statusFilter')}</span><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="ALL">{t('patientDocuments.allStatuses')}</option>{statusOptions.map((value) => <option value={value} key={value}>{value}</option>)}</select></label><label className="field-group"><span className="field-label">{t('patient.fromDate')}</span><input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} /></label><label className="field-group"><span className="field-label">{t('patient.toDate')}</span><input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} /></label></div>
+    {loading ? <MedicalSkeleton /> : error ? null : visibleItems.length ? <div className="records-section unified-document-list">{visibleItems.map((item) => <UnifiedPatientDocumentCard item={item} key={item.id} t={t} language={language} subjectId={subjectId} onViewDocument={setSelectedDocument} />)}</div> : <EmptyMedicalState title={t('patientDocuments.emptyTitle')} description={t(category === 'ALL' ? 'patientDocuments.emptyDescription' : 'patientDocuments.emptyCategoryDescription')} />}
+    {selectedDocument && <PatientDocumentViewer document={selectedDocument} subjectId={subjectId} t={t} language={language} onClose={() => setSelectedDocument(null)} />}
+  </section>
+}
+
+function documentCategoryIcon(category) { return { ALL: '▤', PRESCRIPTIONS: '✚', LABS: '⌁', REFERRALS: '↗', CERTIFICATES: '▣', CONCLUSIONS: '✓' }[category] || '▤' }
+function documentStatusClass(status) { return String(status || '').toLowerCase().replaceAll('_', '-') }
+
+function UnifiedPatientDocumentCard({ item, t, language, subjectId, onViewDocument }) {
+  const document = item.document
+  const visit = item.visit
+  const title = item.title || t('patientDocuments.untitled')
+  const date = recordDateKey(item)
+  const displayCategory = item.category === 'ALL' && document?.type ? t(`patientDocuments.types.${document.type}`) : t(`patientDocuments.categories.${item.category}`)
+  const details = [...(item.details || [])]
+  if (item.category === 'CONCLUSIONS' && visit?.diagnosis) details.push(`${t('patient.diagnosis')}: ${visit.diagnosisName || visit.diagnosis}`)
+  if (item.category === 'CONCLUSIONS' && visit?.recommendations) details.push(`${t('patient.recommendations')}: ${visit.recommendations}`)
+  return <article className="record-card unified-document-card"><div className="record-card__header"><div><span className="eyebrow"><span className="document-category-icon" aria-hidden="true">{documentCategoryIcon(item.category)}</span> {displayCategory} · {date ? formatDateWithYear(date, language) : t('patient.dateNotSpecified')}</span><h3>{title}</h3></div>{item.status && <span className={`status status--${documentStatusClass(item.status)}`}>{item.status}</span>}</div><div className="unified-document-card__meta">{item.doctorName && <span>{t('patient.issuedBy')}: {item.doctorName}</span>}{item.organization && <span>{t('patientDocuments.organization')}: {item.organization}</span>}{item.visitId && <span>{t('patientDocuments.visitNumber')}: #{item.visitId}</span>}</div>{details.length ? <div className="unified-document-card__details">{details.map((detail, index) => <p key={`${item.id}-detail-${index}`}>{detail}</p>)}</div> : null}<div className="record-card__actions">{document && <><button className="button button--secondary button--compact" type="button" onClick={() => onViewDocument(document)}>{t('documentEditor.view')}</button><PatientDocumentPdfButton id={document.id} subjectId={subjectId} t={t} /></>}{item.visitId && <button className="button button--text button--compact" type="button" onClick={() => navigate(`/patient/medical-history?visitId=${item.visitId}${subjectId ? `&subjectId=${subjectId}` : ''}`)}>{t('patientDocuments.openVisit')}</button>}</div></article>
+}
+
+const patientDocumentTypes = ['CERTIFICATE', 'REFERRAL', 'PRESCRIPTION', 'CONCLUSION', 'REPORT', 'LAB_REQUEST', 'LAB_RESULT', 'SCAN', 'XRAY', 'MRI', 'CT', 'ULTRASOUND', 'OTHER']
+  function documentTypeLabel(type, t) { return t(`patientDocuments.types.${type}`) || type }
+
+function ClinicalDataCard({ item, kind, t, language, subjectId, onViewDocument }) {
   if (kind === 'diagnoses') return <article className="record-card"><span className="eyebrow">{t('workflow.icd10')} · {item.icd10Code?.code}</span><h3>{item.icd10Code?.name}</h3>{item.notes && <p>{item.notes}</p>}</article>
   if (kind === 'prescriptions') return <article className="record-card"><span className="eyebrow">{t('patient.prescription')}</span><h3>{item.title}</h3>{item.description && <p>{item.description}</p>}{item.instructions && <p><strong>{t('patient.howToPerform')}</strong> {item.instructions}</p>}</article>
   if (kind === 'labs') return <article className="record-card"><span className="eyebrow">{t('patient.lab')} · {item.testDate || t('patient.dateNotSpecified')}</span><h3>{item.testName}</h3>{item.status && <p><strong>{t('patient.status')}:</strong> {labStatusLabel(item.status, t)}</p>}{item.result && <p><strong>{t('patient.result')}:</strong> {item.result}</p>}{item.referenceRange && <p><strong>{t('patient.referenceRange')}:</strong> {item.referenceRange}</p>}{item.comment && <p>{item.comment}</p>}{item.doctorName && <small className="muted-text">{t('patient.assignedBy')}: {item.doctorName}</small>}</article>
   if (kind === 'referrals') return <article className="record-card"><span className="eyebrow">{t('patient.referrals')}</span><h3>{item.referralType || item.type || t('patient.medicalDocument')}</h3>{item.reason && <p><strong>{t('patient.reason')}</strong>{item.reason}</p>}{item.destination && <p><strong>{t('patient.destination')}</strong>{item.destination}</p>}{item.visit?.appointmentAt && <small className="muted-text">{t('patient.afterAppointment')} {appointmentDateTime(item.visit.appointmentAt, language, t)}</small>}</article>
   if (kind === 'certificates') return <article className="record-card"><span className="eyebrow">{t('patient.certificate')} · {item.issuedAt?.slice(0, 10)}</span><h3>{item.type}</h3>{item.description && <p>{item.description}</p>}{item.validUntil && <p><strong>{t('patient.validUntil')}:</strong> {item.validUntil}</p>}{item.doctorName && <small className="muted-text">{t('patient.issuedBy')}: {item.doctorName}</small>}</article>
-  if (kind === 'documents') return <article className="record-card"><span className="eyebrow">{t('patient.document')}</span><h3>{item.title || item.name || item.type || t('patient.medicalDocument')}</h3>{item.description && <p>{item.description}</p>}{item.documentType && <p><strong>{t('patient.type')}</strong>{item.documentType}</p>}{item.visit?.appointmentAt && <small className="muted-text">{t('patient.afterAppointment')} {appointmentDateTime(item.visit.appointmentAt, language, t)}</small>}</article>
+  if (kind === 'documents') return <article className="record-card"><span className="eyebrow">{item.documentNumber || t('patient.document')} · {item.status === 'APPROVED' ? t('documentEditor.approved') : item.status || t('documentEditor.approved')}</span><h3>{item.title || item.name || item.type || t('patient.medicalDocument')}</h3>{item.description && <p>{item.description}</p>}<small className="muted-text">{item.approvedAt?.slice(0, 10) || item.createdAt?.slice(0, 10) || t('patient.dateNotSpecified')}{item.doctorName ? ` · ${item.doctorName}` : ''}{item.clinicName ? ` · ${item.clinicName}` : ''}</small>{item.type && <p><strong>{t('patient.type')}</strong> {documentTypeLabel(item.type, t)}</p>}{item.appointmentAt && <small className="muted-text">{t('patient.afterAppointment')} {appointmentDateTime(item.appointmentAt, language, t)}</small>}{item.id && <div className="record-card__actions"><button className="button button--secondary button--compact" type="button" onClick={() => onViewDocument?.(item)}>{t('documentEditor.view')}</button><PatientDocumentPdfButton id={item.id} subjectId={subjectId} t={t} /></div>}</article>
   return <article className="record-card"><span className="eyebrow">{t('patient.prescriptionMedicine')}</span><h3>{item.medicationName}</h3><p>{[item.dosage, item.frequency, item.duration].filter(Boolean).join(' · ')}</p>{item.instructions && <p>{item.instructions}</p>}</article>
+}
+
+function PatientDocumentPdfButton({ id, subjectId, t }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const openPdf = async (print = false) => {
+    setBusy(true); setError('')
+    try {
+      const blob = await downloadPatientDocumentPdf(id, subjectId)
+      const url = URL.createObjectURL(blob)
+      if (print) window.open(url, '_blank', 'noopener,noreferrer')
+      else { const link = document.createElement('a'); link.href = url; link.download = `QamqorMed-${id}.pdf`; link.click() }
+      window.setTimeout(() => URL.revokeObjectURL(url), 60000)
+    } catch (requestError) { setError(requestError.message || t('common.error')) } finally { setBusy(false) }
+  }
+  return <><button className="button button--secondary button--compact" type="button" disabled={busy} onClick={() => openPdf(false)}>{busy ? t('common.loading') : t('documentEditor.downloadPdf')}</button><button className="button button--secondary button--compact" type="button" disabled={busy} onClick={() => openPdf(true)}>{t('documentEditor.print')}</button>{error && <small className="error-message">{error}</small>}</>
+}
+
+function PatientDocumentViewer({ document: value, subjectId, t, language, onClose }) {
+  return <div className="dev-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><section className="dev-modal document-viewer" role="dialog" aria-modal="true" aria-labelledby="patient-document-title"><div className="dev-modal-header"><div><span className="dev-section-kicker">{t('patient.medicalDocument')}</span><h2 id="patient-document-title">{value.title || t('patient.document')}</h2></div><button className="dev-close-button" type="button" aria-label={t('common.close')} onClick={onClose}>×</button></div><div className="document-viewer__meta"><span>{value.documentNumber || '—'}</span><span>{value.approvedAt?.slice(0, 10) || value.createdAt?.slice(0, 10) || t('patient.dateNotSpecified')}</span><span>{value.doctorName || '—'}</span><span>{value.clinicName || '—'}</span></div><pre className="document-viewer__content">{value.finalizedContent || value.description || t('patientDocuments.documentContentUnavailable')}</pre><div className="document-viewer__actions"><PatientDocumentPdfButton id={value.id} subjectId={subjectId} t={t} /><button className="button button--secondary button--compact" type="button" onClick={onClose}>{t('common.close')}</button></div></section></div>
 }
 
 function labStatusLabel(value, t) { return { READY: t('patient.ready'), COMPLETED: t('patient.ready'), PENDING: t('patient.pending'), IN_PROGRESS: t('patient.inProgress'), CANCELLED: t('patient.cancelled') }[value] || t('patient.status') }
@@ -487,7 +701,7 @@ function SubjectChoice({ selected, onClick, title, subtitle }) { return <button 
 function BookingSummary({ subject, doctor, specialty, clinic, dateKey, time, t, language }) { return <div className="booking-summary"><div className="booking-summary__heading"><span className="eyebrow">{t('patient.bookingTitle')}</span><strong>{formatDateWithYear(dateKey, language)} · {time}</strong></div><dl><div><dt>{t('workflow.patient')}</dt><dd>{subject ? fullName(subject) : '—'}{subject?.relationshipLabel && <small>{t('patient.childDependent')} · {subject.relationshipLabel}</small>}</dd></div><div><dt>{t('patient.clinic')}</dt><dd>{clinic || '—'}</dd></div><div><dt>{t('staff.specialty')}</dt><dd>{specialty || '—'}</dd></div><div><dt>{t('workflow.doctor')}</dt><dd>{doctor ? `${doctor.lastName} ${doctor.firstName}` : '—'}</dd></div></dl></div> }
 function AppointmentRow({ item, detailed = false, t, language }) { return <div className="appointment-row"><div><span className="eyebrow">{t('patient.patient')}</span><strong>{item.subject?.fullName}</strong><small>{item.subject?.type === 'DEPENDENT' ? `${item.subject.relationship || t('patient.dependentProfile')} · ${t('workflow.bookedBy', { name: item.bookedBy?.fullName })}` : t('patient.selfBooking')}</small></div><div><span className="eyebrow">{t('workflow.doctor')}</span><strong>{item.doctor?.fullName}</strong><small>{item.doctor?.specialty} · {item.clinic?.name}</small></div><div><span className="eyebrow">{t('workflow.time')}</span><strong>{appointmentDateTime(item.appointmentAt, language, t)}</strong>{detailed && <small>{item.clinic?.cityName}</small>}</div></div> }
 function RecordCard({ record, t, language }) { return <article className="record-card"><div className="record-card__header"><div><span className="eyebrow">{record.createdAt?.slice(0, 10)} · {record.doctor?.specialty}</span><h3>{record.subject?.fullName}</h3></div><span className="record-doctor">{record.doctor?.fullName}</span></div>{[[t('patient.diagnosis'), record.diagnosis], [t('patient.recommendations'), record.recommendations], [t('patient.treatments'), record.prescriptions], [t('patient.referrals'), record.referrals]].filter(([, value]) => value).map(([label, value]) => <p key={label}><strong>{label}</strong>{value}</p>)}</article> }
-function VisitCard({ visit, t }) { return <article className="record-card"><div className="record-card__header"><div><span className="eyebrow">{visit.appointmentAt?.replace('T', ' ')} · {visit.doctor?.specialty}</span><h3>{visit.diagnosisName || visit.diagnosis}</h3><small className="muted-text">{visit.clinic?.name} · {t('patient.completedVisitsEmpty')}</small></div><span className="record-doctor">{visit.doctor?.fullName}</span></div><p className="muted-text">{t('patient.appointment')} #{visit.appointmentId}</p>{[[t('patient.diagnosis'), visit.diagnosis], [t('patient.complaints'), visit.chiefComplaint], [t('patient.anamnesis'), visit.anamnesis], [t('patient.recommendations'), visit.recommendations], [t('patient.doctorNotes'), visit.doctorNotes]].filter(([, value]) => value).map(([label, value]) => <p key={label}><strong>{label}</strong>{value}</p>)}<ListForVisit title={t('patient.treatments')} items={visit.treatments} render={(item) => `${item.name}${item.dosage ? ` · ${item.dosage}` : ''}${item.frequency ? ` · ${item.frequency}` : ''}${item.duration ? ` · ${item.duration}` : ''}`} /><ListForVisit title={t('patient.referrals')} items={visit.referrals} render={(item) => `${item.referralType}${item.reason ? ` · ${item.reason}` : ''}`} /><ListForVisit title={t('patient.documents')} items={visit.documents} render={(item) => item.title} /></article> }
+function VisitCard({ visit, t, subjectId, onViewDocument }) { return <article className="record-card" id={`visit-${visit.id}`}><div className="record-card__header"><div><span className="eyebrow">{visit.appointmentAt?.replace('T', ' ')} · {visit.doctor?.specialty}</span><h3>{visit.diagnosisName || visit.diagnosis || t('patient.appointment')}</h3><small className="muted-text">{visit.clinic?.name} · {t('patient.completedVisitsEmpty')}</small></div><span className="record-doctor">{visit.doctor?.fullName}</span></div><p className="muted-text">{t('patient.appointment')} #{visit.appointmentId}</p>{[[t('patient.diagnosis'), visit.diagnosis], [t('patient.complaints'), visit.chiefComplaint], [t('patient.anamnesis'), visit.anamnesis], [t('patient.recommendations'), visit.recommendations], [t('patient.doctorNotes'), visit.doctorNotes]].filter(([, value]) => value).map(([label, value]) => <p key={label}><strong>{label}</strong>{value}</p>)}<ListForVisit title={t('patient.treatments')} items={visit.treatments} render={(item) => `${item.name}${item.dosage ? ` · ${item.dosage}` : ''}${item.frequency ? ` · ${item.frequency}` : ''}${item.duration ? ` · ${item.duration}` : ''}`} /><ListForVisit title={t('patient.referrals')} items={visit.referrals} render={(item) => `${item.referralType}${item.reason ? ` · ${item.reason}` : ''}`} />{visit.documents?.length ? <div className="visit-list"><strong>{t('patient.documents')}</strong>{visit.documents.map((item) => <div className="visit-document-row" key={item.id}><span>{item.title || documentTypeLabel(item.type, t)}<small>{item.documentNumber || item.status || ''}</small></span><div><button className="button button--secondary button--compact" type="button" onClick={() => onViewDocument?.(item)}>{t('documentEditor.view')}</button><PatientDocumentPdfButton id={item.id} subjectId={subjectId} t={t} /></div></div>)}</div> : null}</article> }
 function ListForVisit({ title, items = [], render }) { return items?.length ? <div className="visit-list"><strong>{title}</strong>{items.map((item) => <span key={item.id}>• {render(item)}</span>)}</div> : null }
 function statusLabel(status, t) { const key = { BOOKED: 'booked', CONFIRMED: 'confirmed', ARRIVED: 'arrived', PREPARING: 'preparing', READY: 'ready', IN_APPOINTMENT: 'inAppointment', COMPLETED: 'completed', CANCELLED: 'cancelled', NO_SHOW: 'noShow', SCHEDULED: 'booked', CHECKED_IN: 'arrived', NURSE_IN_PROGRESS: 'preparing', READY_FOR_DOCTOR: 'ready', DOCTOR_IN_PROGRESS: 'inAppointment', IN_PROGRESS: 'preparing' }[status]; return key ? t(`appointment.status.${key}`) : t('staff.unknownStatus') }
 function emptyDependent() { return { firstName: '', lastName: '', middleName: '', dateOfBirth: '', gender: '', iin: '', relationship: '', phone: '' } }
@@ -506,6 +720,13 @@ export function PatientMedicalHistoryPage() {
   const [timelineType, setTimelineType] = useState('ALL')
   const [timelineFrom, setTimelineFrom] = useState('')
   const [timelineTo, setTimelineTo] = useState('')
+  const [selectedDocument, setSelectedDocument] = useState(null)
+  const targetVisitId = new URLSearchParams(location.search).get('visitId')
+  const targetSubjectId = new URLSearchParams(location.search).get('subjectId')
+
+  useEffect(() => {
+    if (targetSubjectId) setSelected(targetSubjectId)
+  }, [targetSubjectId])
 
   useEffect(() => {
     setLoading(true)
@@ -527,6 +748,12 @@ export function PatientMedicalHistoryPage() {
       .finally(() => setLoading(false))
   }, [profile, selected, reloadKey, t])
 
+  useEffect(() => {
+    if (loading || !targetVisitId) return
+    const target = document.getElementById(`visit-${targetVisitId}`)
+    target?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [loading, targetVisitId, data])
+
   if (!profile) return <section className="page-shell"><p>{loading ? t('patient.loadingRecord') : t('patient.notLoadedProfile')}</p><PageMessage error={error} />{error && <button className="button button--secondary" type="button" onClick={() => setReloadKey((value) => value + 1)}>{t('staff.retry')}</button>}</section>
   if (loading && !data) return <section className="page-shell"><p>{t('patient.loadingRecord')}</p><PageMessage error={error} /></section>
   const subjectName = selected === 'SELF' ? fullName(profile) : dependents.find((item) => String(item.id) === String(selected))?.fullName
@@ -539,13 +766,17 @@ export function PatientMedicalHistoryPage() {
       && (!timelineFrom || date >= timelineFrom)
       && (!timelineTo || date <= timelineTo)
   })
+  const openDocument = async (item) => {
+    try { setError(''); setSelectedDocument(await getPatientDocument(item.id, selected === 'SELF' ? null : selected)) }
+    catch (requestError) { setError(messageFor(requestError, t)) }
+  }
   return <section className="page-shell medical-record-page">
     <div className="page-heading"><div className="eyebrow">{t('patient.medicalCard')}</div><h1>{historyOnly ? t('patient.historyTitle') : t('patient.overview')}</h1><p className="form-description">{t('patient.medicalCardDescription')}</p></div>
     <MedicalTabs active={historyOnly ? 'history' : 'overview'} t={t} />
      <PageMessage error={error} />{error && <button className="button button--secondary button--compact" type="button" onClick={() => setReloadKey((value) => value + 1)}>{t('staff.retry')}</button>}
     <div className="subject-tabs"><button className={selected === 'SELF' ? 'is-active' : ''} onClick={() => setSelected('SELF')}>{fullName(profile) || t('patient.myself')}</button>{dependents.map((item) => <button className={String(selected) === String(item.id) ? 'is-active' : ''} onClick={() => setSelected(String(item.id))} key={item.id}>{item.firstName} · {item.relationshipLabel}</button>)}</div>
     <SubjectContext name={subjectName} t={t} />
-    {loading ? <MedicalSkeleton /> : historyOnly ? <div className="records-section">{records.length ? records.map((record) => <VisitCard visit={record} key={record.id} t={t} language={language} />) : <EmptyMedicalState title={t('patient.historyEmpty')} description={t('patient.completedVisitsEmpty')} />}</div> : <><div className="medical-overview-grid">
+    {loading ? <MedicalSkeleton /> : historyOnly ? <div className="records-section">{records.length ? records.map((record) => <VisitCard visit={record} key={record.id} t={t} language={language} subjectId={selected === 'SELF' ? null : selected} onViewDocument={openDocument} />) : <EmptyMedicalState title={t('patient.historyEmpty')} description={t('patient.completedVisitsEmpty')} />}</div> : <><div className="medical-overview-grid">
       <OverviewCard icon="◷" title={t('patient.visits')} value={summary.visits ?? 0} meta={records[0] ? formatDateWithYear(String(records[0].appointmentAt).slice(0, 10), language) : t('medicalUi.completedVisitsEmpty')} />
       <OverviewCard icon="◇" title={t('patient.diagnoses')} value={summary.diagnoses ?? 0} meta={records[0]?.diagnosisName || t('medicalUi.noDiagnoses')} />
       <OverviewCard icon="⌁" title={t('patient.prescriptions')} value={summary.activePrescriptions ?? 0} meta={`${t('patient.medications')}: ${summary.activeMedications ?? 0}`} />
@@ -553,7 +784,7 @@ export function PatientMedicalHistoryPage() {
      </div><div className="records-section"><div className="section-heading"><div><div className="eyebrow">{t('patient.timeline')}</div><h2>{t('patient.latestEvents')}</h2></div><button className="text-button" type="button" onClick={() => navigate('/patient/medical-history')}>{t('patient.allEvents')} →</button></div>
        <div className="medical-filter-bar"><label className="field-group"><span className="field-label">{t('patient.event')}</span><select value={timelineType} onChange={(event) => setTimelineType(event.target.value)}><option value="ALL">{t('patient.allEvents')}</option><option value="VISIT">{t('patient.visits')}</option><option value="DIAGNOSIS">{t('patient.diagnoses')}</option><option value="PRESCRIPTION">{t('patient.prescriptions')}</option><option value="MEDICATION">{t('patient.medications')}</option><option value="LAB_RESULT">{t('patient.labs')}</option><option value="REFERRAL">{t('patient.referrals')}</option><option value="CERTIFICATE">{t('patient.certificates')}</option><option value="DOCUMENT">{t('patient.documents')}</option></select></label><label className="field-group"><span className="field-label">{t('patient.fromDate')}</span><input type="date" value={timelineFrom} onChange={(event) => setTimelineFrom(event.target.value)} /></label><label className="field-group"><span className="field-label">{t('patient.toDate')}</span><input type="date" value={timelineTo} onChange={(event) => setTimelineTo(event.target.value)} /></label></div>
        {visibleTimeline.length ? <div className="medical-timeline">{visibleTimeline.slice(0, 12).map((item) => <article className="medical-timeline__item" key={item.type + '-' + item.relatedEntityId + '-' + item.date}><span className="medical-timeline__dot" /><div><span className="eyebrow">{timelineLabel(item.type, t)} · {formatTimelineDate(item.date, language, t)}</span><h3>{item.title}</h3>{item.description && <p>{item.description}</p>}</div></article>)}</div> : <EmptyMedicalState title={timeline.length ? t('patient.eventsNotFound') : t('patient.noEvents')} description={timeline.length ? t('patient.changeFilters') : t('patient.afterAppointment')} action={timeline.length ? null : t('patient.bookForDoctor')} onAction={timeline.length ? undefined : () => navigate('/patient/appointments')} />}
-    </div></>}</section>
+    </div></>}{selectedDocument && <PatientDocumentViewer document={selectedDocument} subjectId={selected === 'SELF' ? null : selected} t={t} language={language} onClose={() => setSelectedDocument(null)} />}</section>
 }
 
 function timelineLabel(type, t) {

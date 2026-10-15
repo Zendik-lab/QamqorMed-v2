@@ -58,6 +58,10 @@ public class Appointment {
     @Column(nullable = false, length = 30)
     private AppointmentStatus status = AppointmentStatus.BOOKED;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "confirmation_status", nullable = false, length = 20)
+    private AppointmentConfirmationStatus confirmationStatus = AppointmentConfirmationStatus.PENDING;
+
     @Column(length = 1000)
     private String note;
 
@@ -108,6 +112,8 @@ public class Appointment {
     public void setAppointmentAt(LocalDateTime appointmentAt) { this.appointmentAt = appointmentAt; }
     public AppointmentStatus getStatus() { return status; }
     public void setStatus(AppointmentStatus status) { this.status = status; }
+    public AppointmentConfirmationStatus getConfirmationStatus() { return confirmationStatus; }
+    public void setConfirmationStatus(AppointmentConfirmationStatus confirmationStatus) { this.confirmationStatus = confirmationStatus; }
     public AppointmentStatus getCanonicalStatus() { return status == null ? null : status.canonical(); }
     public String getNote() { return note; }
     public void setNote(String note) { this.note = note; }

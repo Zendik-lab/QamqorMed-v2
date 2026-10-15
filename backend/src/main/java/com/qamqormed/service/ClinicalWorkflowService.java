@@ -6,6 +6,7 @@ import com.qamqormed.dto.AppointmentStatusRequest;
 import com.qamqormed.dto.DoctorPatientDetailResponse;
 import com.qamqormed.dto.DoctorPatientDirectoryResponse;
 import com.qamqormed.dto.DoctorPatientSummaryResponse;
+import com.qamqormed.dto.DoctorReferralResponse;
 import com.qamqormed.dto.MedicalDocumentRequest;
 import com.qamqormed.dto.MedicalDocumentResponse;
 import com.qamqormed.dto.LabResultResponse;
@@ -26,6 +27,7 @@ import com.qamqormed.entity.Clinic;
 import com.qamqormed.entity.DoctorNurseAssignment;
 import com.qamqormed.entity.DoctorProfile;
 import com.qamqormed.entity.MedicalDocument;
+import com.qamqormed.entity.MedicalDocumentStatus;
 import com.qamqormed.entity.MedicalRecord;
 import com.qamqormed.entity.MedicalVisit;
 import com.qamqormed.entity.NurseIntake;
@@ -89,6 +91,8 @@ public class ClinicalWorkflowService {
     private final com.qamqormed.repository.ICD10CodeRepository icd10Codes;
     private final LabResultRepository labResults;
     private final MedicalCertificateRepository certificates;
+    private final NotificationService notifications;
+    private final AppointmentStatusHistoryService statusHistory;
 
     public ClinicalWorkflowService(DoctorProfileRepository doctors, NurseProfileRepository nurses,
                                    DoctorNurseAssignmentRepository assignments, AppointmentRepository appointments,
@@ -100,7 +104,8 @@ public class ClinicalWorkflowService {
                                    com.qamqormed.repository.PrescriptionRepository structuredPrescriptions,
                                    com.qamqormed.repository.MedicationPrescriptionRepository medicationPrescriptions,
                                    com.qamqormed.repository.ICD10CodeRepository icd10Codes,
-                                   LabResultRepository labResults, MedicalCertificateRepository certificates) {
+                                   LabResultRepository labResults, MedicalCertificateRepository certificates,
+                                   NotificationService notifications, AppointmentStatusHistoryService statusHistory) {
         this.doctors = doctors;
         this.nurses = nurses;
         this.assignments = assignments;
@@ -120,6 +125,8 @@ public class ClinicalWorkflowService {
         this.icd10Codes = icd10Codes;
         this.labResults = labResults;
         this.certificates = certificates;
+        this.notifications = notifications;
+        this.statusHistory = statusHistory;
     }
 
     @Transactional(readOnly = true)
@@ -298,6 +305,9 @@ public class ClinicalWorkflowService {
         appointment.setStatus(AppointmentStatus.COMPLETED);
         appointments.save(appointment);
         visit = visits.save(visit);
+        notifications.medical(appointment.getBookedBy(), com.qamqormed.entity.NotificationType.VISIT_COMPLETED,
+                "Результаты приёма готовы", "Откройте медицинскую историю, чтобы посмотреть результат.", appointment,
+                "/patient/medical-history", "visit-completed-" + appointment.getId());
         return MedicalRecordResponse.from(syncLegacyRecord(visit));
     }
 
@@ -344,6 +354,9 @@ public class ClinicalWorkflowService {
         appointment.setCompletedAt(java.time.Instant.now());
         appointments.save(appointment);
         syncLegacyRecord(visit);
+        notifications.medical(appointment.getBookedBy(), com.qamqormed.entity.NotificationType.VISIT_COMPLETED,
+                "Результаты приёма готовы", "Откройте медицинскую историю, чтобы посмотреть результат.", appointment,
+                "/patient/medical-history", "visit-completed-" + appointment.getId());
         return details(appointment);
     }
 
@@ -360,7 +373,10 @@ public class ClinicalWorkflowService {
         treatment.setFrequency(trimToNull(request.frequency()));
         treatment.setDuration(trimToNull(request.duration()));
         treatment.setInstructions(trimToNull(request.instructions()));
-        return TreatmentResponse.from(treatments.save(treatment));
+        Treatment saved = treatments.save(treatment);
+        notifications.medical(appointment.getBookedBy(), com.qamqormed.entity.NotificationType.PRESCRIPTION_CREATED,
+                "Добавлено новое назначение", "Врач добавил новое назначение.", appointment, "/patient/documents", "treatment-created-" + saved.getId());
+        return TreatmentResponse.from(saved);
     }
 
     @Transactional
@@ -382,7 +398,33 @@ public class ClinicalWorkflowService {
         referral.setNotes(trimToNull(request.notes()));
         referral.setValidUntil(request.validUntil());
         referral.setStatus(ReferralStatus.CREATED);
-        return ReferralResponse.from(referrals.save(referral));
+        Referral saved = referrals.save(referral);
+        notifications.medical(appointment.getBookedBy(), com.qamqormed.entity.NotificationType.REFERRAL_CREATED,
+                "Добавлено новое направление", "Врач добавил новое направление.", appointment, "/patient/documents", "referral-created-" + saved.getId());
+        return ReferralResponse.from(saved);
+    }
+
+    @Transactional(readOnly = true)
+    public List<DoctorReferralResponse> doctorReferrals(Long userId, String query, ReferralStatus status,
+                                                        ReferralType type, LocalDate from, LocalDate to) {
+        doctorForUser(userId);
+        String normalized = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
+        return referrals.findAllByDoctorUserIdOrderByIssuedAtDesc(userId).stream()
+                .filter(item -> status == null || item.getStatus() == status)
+                .filter(item -> type == null || item.getReferralType() == type)
+                .filter(item -> dateInRange(item.getIssuedAt(), from, to))
+                .filter(item -> normalized.isBlank() || subjectName(item.getMedicalVisit().getAppointment()).toLowerCase(Locale.ROOT).contains(normalized)
+                        || valueOf(subjectIin(item.getMedicalVisit().getAppointment())).contains(normalized))
+                .map(DoctorReferralResponse::from)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public byte[] doctorReferralPdf(Long userId, Long referralId, ReferralPdfService pdf) {
+        doctorForUser(userId);
+        Referral referral = referrals.findByIdAndDoctorUserId(referralId, userId)
+                .orElseThrow(() -> new NotFoundException("Направление не найдено"));
+        return pdf.render(referral);
     }
 
     @Transactional
@@ -393,7 +435,7 @@ public class ClinicalWorkflowService {
         MedicalVisit visit = requiredVisit(appointmentId);
         MedicalDocument document = new MedicalDocument();
         document.setMedicalVisit(visit);
-        document.setPatientUser(visit.getPatientUser());
+        document.setPatientUser(documentOwner(visit));
         document.setDependent(visit.getDependent());
         document.setDoctorUser(visit.getDoctorUser());
         document.setType(request.type());
@@ -404,7 +446,14 @@ public class ClinicalWorkflowService {
         document.setFileName(trimToNull(request.fileName()));
         document.setMimeType(trimToNull(request.mimeType()));
         document.setFileSize(request.fileSize());
-        return MedicalDocumentResponse.from(documents.save(document));
+        // Legacy upload endpoint represents an already issued attachment. The
+        // new template editor uses DRAFT explicitly and never reaches this path.
+        document.setStatus(com.qamqormed.entity.MedicalDocumentStatus.APPROVED);
+        document.setFinalizedContent(trimToNull(request.description()));
+        MedicalDocument saved = documents.save(document);
+        notifications.medical(appointment.getBookedBy(), com.qamqormed.entity.NotificationType.DOCUMENT_CREATED,
+                "Добавлен новый документ", "Врач добавил новый медицинский документ.", appointment, "/patient/documents", "document-created-" + saved.getId());
+        return MedicalDocumentResponse.from(saved);
     }
 
     @Transactional(readOnly = true)
@@ -440,7 +489,7 @@ public class ClinicalWorkflowService {
     public AppointmentDetailsResponse startNurseAssessment(Long userId, Long appointmentId) {
         Appointment appointment = nurseAppointmentEntity(userId, appointmentId);
         AppointmentStatus current = canonical(appointment.getStatus());
-        if (current == AppointmentStatus.BOOKED) {
+        if (current == AppointmentStatus.BOOKED || current == AppointmentStatus.CONFIRMED) {
             appointment.setStatus(AppointmentStatus.ARRIVED);
             appointment.setArrivedAt(java.time.Instant.now());
             current = AppointmentStatus.ARRIVED;
@@ -490,6 +539,31 @@ public class ClinicalWorkflowService {
         return details(appointment);
     }
 
+    @Transactional
+    public AppointmentResponse checkInByNurse(Long userId, Long appointmentId) {
+        Appointment appointment = nurseAppointmentEntity(userId, appointmentId);
+        AppointmentStatus current = canonical(appointment.getStatus());
+        if (current == AppointmentStatus.ARRIVED || current == AppointmentStatus.PREPARING || current == AppointmentStatus.READY) return AppointmentResponse.from(appointment);
+        if (current != AppointmentStatus.BOOKED && current != AppointmentStatus.CONFIRMED) throw statusError("отметить прибытие", appointment);
+        appointment.setStatus(AppointmentStatus.ARRIVED); appointment.setArrivedAt(java.time.Instant.now()); appointments.save(appointment);
+        statusHistory.record(appointment, current, AppointmentStatus.ARRIVED, appointment.getBookedBy(), "nurse-check-in");
+        notifications.medical(appointment.getBookedBy(), com.qamqormed.entity.NotificationType.PATIENT_ARRIVED,
+                "Пациент прибыл", "Пациент отмечен как прибывший на приём.", appointment, "/patient/my-appointments", "patient-arrived-" + appointment.getId());
+        return AppointmentResponse.from(appointment);
+    }
+
+    @Transactional
+    public AppointmentResponse noShowByNurse(Long userId, Long appointmentId) {
+        Appointment appointment = nurseAppointmentEntity(userId, appointmentId);
+        AppointmentStatus current = canonical(appointment.getStatus());
+        if (current == AppointmentStatus.NO_SHOW) return AppointmentResponse.from(appointment);
+        if (current != AppointmentStatus.BOOKED && current != AppointmentStatus.CONFIRMED) throw statusError("отметить неявку", appointment);
+        if (appointment.getAppointmentAt().isAfter(LocalDateTime.now(java.time.ZoneId.of("Asia/Qyzylorda")))) throw new BadRequestException("Неявку можно отметить после времени записи");
+        appointment.setStatus(AppointmentStatus.NO_SHOW); appointment.setNoShowAt(java.time.Instant.now()); appointments.save(appointment);
+        statusHistory.record(appointment, current, AppointmentStatus.NO_SHOW, appointment.getBookedBy(), "nurse-no-show");
+        return AppointmentResponse.from(appointment);
+    }
+
     @Transactional(readOnly = true)
     public List<MedicalVisitResponse> patientHistory(Long userId, Long patientId) {
         patients.patient(userId);
@@ -500,7 +574,7 @@ public class ClinicalWorkflowService {
         } else {
             result = visits.findAllByDependentIdOrderByCompletedAtDesc(patients.dependent(userId, patientId).getId());
         }
-        return result.stream().filter(visit -> visit.getCompletedAt() != null).map(this::visitResponse).toList();
+        return result.stream().filter(visit -> visit.getCompletedAt() != null).map(item -> visitResponse(item, true)).toList();
     }
 
     @Transactional(readOnly = true)
@@ -511,7 +585,7 @@ public class ClinicalWorkflowService {
             throw new NotFoundException("Результат будет доступен после завершения приёма");
         }
         return visitResponse(visits.findByAppointmentId(appointmentId)
-                .orElseThrow(() -> new NotFoundException("Медицинский результат не найден")));
+                .orElseThrow(() -> new NotFoundException("Медицинский результат не найден")), true);
     }
 
     private AppointmentDetailsResponse details(Appointment appointment) {
@@ -534,10 +608,16 @@ public class ClinicalWorkflowService {
 
     /** Shared DTO mapping used by patient and doctor medical-card read models. */
     public MedicalVisitResponse visitResponse(MedicalVisit visit) {
+        return visitResponse(visit, false);
+    }
+
+    public MedicalVisitResponse visitResponse(MedicalVisit visit, boolean approvedDocumentsOnly) {
         return MedicalVisitResponse.from(visit,
                 treatments.findAllByMedicalVisitIdOrderByCreatedAtAsc(visit.getId()).stream().map(TreatmentResponse::from).toList(),
                 referrals.findAllByMedicalVisitIdOrderByCreatedAtAsc(visit.getId()).stream().map(ReferralResponse::from).toList(),
-                documents.findAllByMedicalVisitIdOrderByCreatedAtAsc(visit.getId()).stream().map(MedicalDocumentResponse::from).toList(),
+                documents.findAllByMedicalVisitIdOrderByCreatedAtAsc(visit.getId()).stream()
+                        .filter(item -> !approvedDocumentsOnly || item.getStatus() == null || item.getStatus() == MedicalDocumentStatus.APPROVED)
+                        .map(item -> approvedDocumentsOnly ? MedicalDocumentResponse.fromPatient(item) : MedicalDocumentResponse.from(item)).toList(),
                 visitDiagnoses.findAllByMedicalVisitIdOrderByPrimaryDiagnosisDescCreatedAtAsc(visit.getId()).stream().map(com.qamqormed.dto.VisitDiagnosisResponse::from).toList(),
                 structuredPrescriptions.findAllByMedicalVisitIdOrderByCreatedAtAsc(visit.getId()).stream().map(com.qamqormed.dto.PrescriptionResponse::from).toList(),
                 medicationPrescriptions.findAllByMedicalVisitIdOrderByCreatedAtAsc(visit.getId()).stream().map(com.qamqormed.dto.MedicationPrescriptionResponse::from).toList());
@@ -547,7 +627,7 @@ public class ClinicalWorkflowService {
         return visits.findByAppointmentId(appointment.getId()).orElseGet(() -> {
             MedicalVisit visit = new MedicalVisit();
             visit.setAppointment(appointment);
-            visit.setPatientUser(appointment.getBookedBy());
+            visit.setPatientUser(documentOwner(appointment));
             visit.setDependent(appointment.getDependent());
             visit.setPatientProfile(appointment.getPatientProfile());
             visit.setDoctorProfile(appointment.getDoctor());
@@ -560,6 +640,18 @@ public class ClinicalWorkflowService {
     private MedicalVisit requiredVisit(Long appointmentId) {
         return visits.findByAppointmentId(appointmentId)
                 .orElseThrow(() -> new BadRequestException("Сначала начните медицинский приём"));
+    }
+
+    private User documentOwner(MedicalVisit visit) {
+        if (visit.getDependent() != null && visit.getDependent().getOwner() != null) return visit.getDependent().getOwner();
+        if (visit.getPatientProfile() != null && visit.getPatientProfile().getUser() != null) return visit.getPatientProfile().getUser();
+        return visit.getPatientUser();
+    }
+
+    private User documentOwner(Appointment appointment) {
+        if (appointment.getDependent() != null && appointment.getDependent().getOwner() != null) return appointment.getDependent().getOwner();
+        if (appointment.getPatientProfile() != null && appointment.getPatientProfile().getUser() != null) return appointment.getPatientProfile().getUser();
+        return appointment.getBookedBy();
     }
 
     private void syncStructuredDiagnosis(MedicalVisit visit) {
@@ -726,6 +818,13 @@ public class ClinicalWorkflowService {
 
     private String valueOf(String value) { return value == null ? "" : value.toLowerCase(Locale.ROOT); }
 
+    private boolean dateInRange(java.time.Instant value, LocalDate from, LocalDate to) {
+        if (from == null && to == null) return true;
+        LocalDate date = (value == null ? java.time.Instant.now() : value)
+                .atZone(java.time.ZoneId.of("Asia/Qyzylorda")).toLocalDate();
+        return (from == null || !date.isBefore(from)) && (to == null || !date.isAfter(to));
+    }
+
     private String fullName(User user) {
         return String.join(" ", user.getLastName(), user.getFirstName(), user.getMiddleName() == null ? "" : user.getMiddleName())
                 .trim().replaceAll(" +", " ");
@@ -763,6 +862,7 @@ public class ClinicalWorkflowService {
         if (!allowed) throw statusError("изменить статус", appointment);
         appointment.setStatus(target);
         applyStatusTimestamp(appointment, target);
+        statusHistory.record(appointment, current, target, null, null);
     }
 
     private void applyStatusTimestamp(Appointment appointment, AppointmentStatus target) {

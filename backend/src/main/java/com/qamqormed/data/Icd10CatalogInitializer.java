@@ -27,7 +27,8 @@ public class Icd10CatalogInitializer implements CommandLineRunner {
         );
         for (String[] item : seed) {
             ICD10Code code = codes.findByCodeIgnoreCase(item[0]).orElseGet(ICD10Code::new);
-            code.setCode(item[0]); code.setName(item[1]); code.setActive(true); codes.save(code);
+            code.setCode(item[0]); code.setTitleRu(item[1]); code.setActive(true); code.setSelectable(true);
+            code.setSource("DEV_EXAMPLES"); code.setSourceVersion("NOT_FULL_CATALOG"); codes.save(code);
         }
     }
 }

@@ -22,15 +22,19 @@ public class StaffCalendarController {
     @GetMapping({"/api/doctor/calendar", "/api/doctor/schedule", "/api/doctors/me/calendar", "/api/doctors/me/schedule"})
     public StaffCalendarResponse doctor(@AuthenticationPrincipal AuthenticatedUser principal,
                                         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-                                        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-        return calendar.doctorCalendar(principal.getId(), from, to);
+                                        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+                                        @RequestParam(required = false) com.qamqormed.entity.AppointmentStatus status,
+                                        @RequestParam(required = false) String query) {
+        return calendar.doctorCalendar(principal.getId(), from, to, status, query);
     }
 
     @GetMapping({"/api/nurse/calendar", "/api/nurse/schedule", "/api/nurses/me/calendar", "/api/nurses/me/schedule"})
     public StaffCalendarResponse nurse(@AuthenticationPrincipal AuthenticatedUser principal,
                                        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-                                       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-        return calendar.nurseCalendar(principal.getId(), from, to);
+                                       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+                                       @RequestParam(required = false) com.qamqormed.entity.AppointmentStatus status,
+                                       @RequestParam(required = false) String query) {
+        return calendar.nurseCalendar(principal.getId(), from, to, status, query);
     }
 
     @GetMapping("/api/admin/doctors/{doctorId}/schedule")

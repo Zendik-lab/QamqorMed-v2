@@ -43,6 +43,33 @@ public class MedicalDocument {
     @Column(nullable = false, length = 30)
     private MedicalDocumentType type;
 
+    @Column(name = "document_number", unique = true, length = 80)
+    private String documentNumber;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private MedicalDocumentStatus status = MedicalDocumentStatus.APPROVED;
+
+    @Column(length = 5)
+    private String language;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "template_id")
+    private DocumentTemplate template;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "template_version_id")
+    private DocumentTemplateVersion templateVersion;
+
+    @Column(name = "draft_content", columnDefinition = "text")
+    private String draftContent;
+
+    @Column(name = "finalized_content", columnDefinition = "text")
+    private String finalizedContent;
+
+    private Instant approvedAt;
+    private Instant cancelledAt;
+
     @Column(nullable = false, length = 300)
     private String title;
 
@@ -69,7 +96,12 @@ public class MedicalDocument {
     private Instant updatedAt;
 
     @PrePersist
-    void onCreate() { createdAt = Instant.now(); updatedAt = createdAt; }
+    void onCreate() {
+        createdAt = Instant.now();
+        updatedAt = createdAt;
+        if (status == null) status = MedicalDocumentStatus.APPROVED;
+        if (documentNumber == null || documentNumber.isBlank()) documentNumber = "QMED-" + java.util.UUID.randomUUID().toString().substring(0, 12).toUpperCase(java.util.Locale.ROOT);
+    }
     @PreUpdate
     void onUpdate() { updatedAt = Instant.now(); }
 
@@ -84,6 +116,24 @@ public class MedicalDocument {
     public void setDoctorUser(User doctorUser) { this.doctorUser = doctorUser; }
     public MedicalDocumentType getType() { return type; }
     public void setType(MedicalDocumentType type) { this.type = type; }
+    public String getDocumentNumber() { return documentNumber; }
+    public void setDocumentNumber(String documentNumber) { this.documentNumber = documentNumber; }
+    public MedicalDocumentStatus getStatus() { return status; }
+    public void setStatus(MedicalDocumentStatus status) { this.status = status; }
+    public String getLanguage() { return language; }
+    public void setLanguage(String language) { this.language = language; }
+    public DocumentTemplate getTemplate() { return template; }
+    public void setTemplate(DocumentTemplate template) { this.template = template; }
+    public DocumentTemplateVersion getTemplateVersion() { return templateVersion; }
+    public void setTemplateVersion(DocumentTemplateVersion templateVersion) { this.templateVersion = templateVersion; }
+    public String getDraftContent() { return draftContent; }
+    public void setDraftContent(String draftContent) { this.draftContent = draftContent; }
+    public String getFinalizedContent() { return finalizedContent; }
+    public void setFinalizedContent(String finalizedContent) { this.finalizedContent = finalizedContent; }
+    public Instant getApprovedAt() { return approvedAt; }
+    public void setApprovedAt(Instant approvedAt) { this.approvedAt = approvedAt; }
+    public Instant getCancelledAt() { return cancelledAt; }
+    public void setCancelledAt(Instant cancelledAt) { this.cancelledAt = cancelledAt; }
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }
     public String getDescription() { return description; }

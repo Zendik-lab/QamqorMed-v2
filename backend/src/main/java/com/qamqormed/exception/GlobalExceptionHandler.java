@@ -2,6 +2,7 @@ package com.qamqormed.exception;
 
 import com.qamqormed.dto.ApiError;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.hibernate.exception.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -42,9 +43,30 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiError> handleDataIntegrityViolation(DataIntegrityViolationException exception) {
+        String constraint = constraintName(exception);
+        if (constraint != null && constraint.contains("appointments_doctor_active_time")) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(
+                    new ApiError(409, "Выбранное время уже занято. Выберите другое.")
+            );
+        }
+        if (constraint != null && constraint.contains("users_phone")) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(
+                    new ApiError(409, "Пользователь с таким номером уже существует")
+            );
+        }
+        log.warn("Data integrity conflict on API request: constraint={}", constraint, exception);
         return ResponseEntity.status(HttpStatus.CONFLICT).body(
-                new ApiError(409, "Пользователь с таким номером уже существует")
+                new ApiError(409, "Операция конфликтует с текущими данными")
         );
+    }
+
+    private String constraintName(Throwable exception) {
+        Throwable current = exception;
+        while (current != null) {
+            if (current instanceof ConstraintViolationException violation) return violation.getConstraintName();
+            current = current.getCause();
+        }
+        return null;
     }
 
     @ExceptionHandler(Exception.class)

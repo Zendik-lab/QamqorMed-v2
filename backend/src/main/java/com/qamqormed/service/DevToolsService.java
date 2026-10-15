@@ -146,6 +146,8 @@ public class DevToolsService {
             nurses.findByUserId(userId)
                     .filter(profile -> profile.isDemo() && profile.isActive())
                     .orElseThrow(() -> new NotFoundException("DEMO-медсестра не найдена"));
+        } else if (!isLegacyDemoUser(user)) {
+            throw new NotFoundException("DEMO-пользователь не найден");
         }
 
         return authService.issueTokenForValidatedUser(user);
@@ -223,6 +225,7 @@ public class DevToolsService {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(criteria.equal(root.get("role"), role));
             predicates.add(criteria.isTrue(root.get("enabled")));
+            predicates.add(root.get("phone").in(LEGACY_DEMO_PASSWORDS.keySet()));
             addUserSearch(predicates, criteria, root, search);
             query.orderBy(criteria.asc(root.get("lastName")), criteria.asc(root.get("firstName")));
             return criteria.and(predicates.toArray(Predicate[]::new));
@@ -374,9 +377,13 @@ public class DevToolsService {
     }
 
     private DevUserResponse userResponse(User user) {
-        boolean demo = user.getPhone() != null && user.getPhone().startsWith("+770000000");
+        boolean demo = isLegacyDemoUser(user);
         return new DevUserResponse(user.getId(), user.getRole().name(), fullName(user), user.getPhone(), demo,
                 user.isEnabled(), null, null, null, null, null, null, credentials(user, demo), disconnected(null), List.of());
+    }
+
+    private boolean isLegacyDemoUser(User user) {
+        return user != null && LEGACY_DEMO_PASSWORDS.containsKey(user.getPhone());
     }
 
     private DevLoginCredentials credentials(User user, boolean demo) {

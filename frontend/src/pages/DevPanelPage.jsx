@@ -9,6 +9,7 @@ import {
 } from '../api/apiClient.js'
 import { useAuth } from '../auth/AuthContext.jsx'
 import { pathForRole } from '../components/RouteGuards.jsx'
+import DevNotificationWorkflowPanel from '../components/DevNotificationWorkflowPanel.jsx'
 import { isDevelopment } from '../config/environment.js'
 import { navigate } from '../utils/navigation.js'
 import { translateError, useTranslation } from '../i18n/index.jsx'
@@ -206,6 +207,8 @@ function DevPanelPage() {
 
         {!loading && pageInfo.totalPages > 0 && <div className="dev-pagination"><button className="dev-secondary-button" type="button" onClick={() => changePage(pageInfo.page - 1)} disabled={pageInfo.page === 0}>{t('dev.previous')}</button><span>{t('dev.pageOf', { current: pageInfo.page + 1, total: pageInfo.totalPages })}</span><button className="dev-secondary-button" type="button" onClick={() => changePage(pageInfo.page + 1)} disabled={pageInfo.page + 1 >= pageInfo.totalPages}>{t('dev.next')}</button></div>}
       </div>
+
+      {isAuthenticated && user?.role === 'ADMIN' && <DevNotificationWorkflowPanel t={t} />}
 
       {selectedRelation && <RelationModal relation={selectedRelation} onClose={() => setSelectedRelation(null)} t={t} />}
     </section>
