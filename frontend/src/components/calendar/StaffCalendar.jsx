@@ -10,6 +10,7 @@ import {
 } from '../../api/apiClient.js'
 import { localeFor, translateError, useTranslation } from '../../i18n/index.jsx'
 import { navigate } from '../../utils/navigation.js'
+import { MotionRegion } from '../../motion/Motion.jsx'
 
 const DAY_NAMES = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']
 const CLINIC_ZONE = 'Asia/Qyzylorda'
@@ -144,7 +145,9 @@ export default function StaffCalendar({ role }) {
     <StatusLegend t={t} />
     {error && <p className="error-message" role="alert">{error}</p>}
     {!events.length && <div className="calendar-empty-banner"><strong>{t('calendarUi.emptyRangeTitle')}</strong><span>{t('calendarUi.emptyRangeDescription')}</span></div>}
-    {!data?.schedule?.intervals?.length ? <div className="staff-calendar-state"><h3>{t('staff.noSchedule')}</h3><p>{t('staff.noScheduleDescription')}</p></div> : view === 'month' ? <MonthView dates={dates} events={events} onSelectDay={(date) => setCalendarState('day', date)} onOpen={openEvent} t={t} language={language} /> : <TimelineView dates={dates} events={events} schedule={data.schedule} exceptions={data.exceptions} onOpen={openEvent} t={t} language={language} timeZone={timeZone} />}
+    <MotionRegion replayKey={`${view}|${viewDate}`} className="motion-calendar" aria-busy={loading}>
+      {!data?.schedule?.intervals?.length ? <div className="staff-calendar-state"><h3>{t('staff.noSchedule')}</h3><p>{t('staff.noScheduleDescription')}</p></div> : view === 'month' ? <MonthView dates={dates} events={events} onSelectDay={(date) => setCalendarState('day', date)} onOpen={openEvent} t={t} language={language} /> : <TimelineView dates={dates} events={events} schedule={data.schedule} exceptions={data.exceptions} onOpen={openEvent} t={t} language={language} timeZone={timeZone} />}
+    </MotionRegion>
     {selected && <AppointmentDrawer selected={selected} details={details} detailsLoading={detailsLoading} role={role} busy={actionBusy} onClose={closeDetails} onPerform={perform} view={view} viewDate={viewDate} t={t} />}
   </section>
 }

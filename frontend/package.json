@@ -9,7 +9,11 @@
     "preview": "vite preview",
     "check:i18n": "node scripts/check-i18n.mjs",
     "test:ai-auth": "node --test scripts/test-ai-auth.mjs",
-    "test": "npm run check:i18n && npm run test:ai-auth"
+    "test:theme": "node --test scripts/test-theme.mjs",
+    "test": "npm run check:i18n && npm run test:ai-auth && npm run test:theme && npm run test:design-system && npm run test:account && npm run test:motion",
+    "test:motion": "node --test scripts/test-motion.mjs",
+    "test:account": "node --test scripts/test-account.mjs",
+    "test:design-system": "node --test scripts/test-design-system.mjs"
   },
   "dependencies": {
     "react": "^19.1.1",

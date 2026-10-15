@@ -1,156 +1,103 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../auth/AuthContext.jsx'
 import { useTranslation } from '../i18n/index.jsx'
-import { navigate, useLocation } from '../utils/navigation.js'
+import { useLocation } from '../utils/navigation.js'
 import { isDevelopment } from '../config/environment.js'
+import { isWorkspacePathActive, mobilePrimary, workspaceMenus, workspaceSection } from '../config/navigation.js'
 import DevToolbar from '../components/DevToolbar.jsx'
-import AdminSidebar, { adminMenuItems } from '../components/AdminSidebar.jsx'
 import NotificationCenter from '../components/NotificationCenter.jsx'
 import AiAssistant from '../components/AiAssistant.jsx'
+import Brand from '../components/Brand.jsx'
+import Footer from '../components/Footer.jsx'
+import ThemeSwitcher from '../components/ThemeSwitcher.jsx'
+import AccessibilitySettings from '../components/AccessibilitySettings.jsx'
+import WorkspaceSidebar from '../components/WorkspaceSidebar.jsx'
+import AppLink from '../components/AppLink.jsx'
+import Icon from '../components/ui/Icon.jsx'
+import Popover from '../components/ui/Popover.jsx'
+import { Drawer } from '../components/ui/Dialog.jsx'
+import { MotionRegion } from '../motion/Motion.jsx'
 
-const menus = {
-  PATIENT: [
-    ['dashboard', '/patient', '⌂'], ['bookAppointment', '/patient/appointments', '＋'], ['myAppointments', '/patient/my-appointments', '◷'],
-    ['documents', '/patient/documents', '▤'], ['waitlist', '/patient/waitlist', '⌛'], ['dependents', '/patient/dependents', '♧'], ['profile', '/patient/profile', '◉'],
-  ],
-  DOCTOR: [
-    ['dashboard', '/doctor', '⌂'], ['appointments', '/doctor/appointments', '＋'], ['schedule', '/doctor/schedule', '▦'], ['patients', '/doctor/patients', '♧'], ['medicalRecords', '/doctor/medical-records', '▤'], ['referrals', '/doctor/referrals', '↗'], ['profile', '/doctor/profile', '◉'],
-  ],
-  NURSE: [
-    ['dashboard', '/nurse', '⌂'], ['todayPatients', '/nurse/today', '♧'], ['appointments', '/nurse/appointments', '▦'], ['vitals', '/nurse/vitals', '♡'], ['profile', '/nurse/profile', '◉'],
-  ],
+function readCollapsed() {
+  try { return window.localStorage.getItem('qamqormed.sidebar.collapsed') === 'true' } catch { return false }
 }
 
-const mobileMenus = {
-  PATIENT: {
-    primary: [['dashboard', '/patient', '⌂'], ['myAppointments', '/patient/my-appointments', '◷'], ['documents', '/patient/documents', '▤'], ['profile', '/patient/profile', '◉']],
-    more: [['bookAppointment', '/patient/appointments', '＋'], ['waitlist', '/patient/waitlist', '⌛'], ['dependents', '/patient/dependents', '♧']],
-  },
-  DOCTOR: {
-    primary: [['dashboard', '/doctor', '⌂'], ['appointments', '/doctor/appointments', '＋'], ['medicalRecords', '/doctor/medical-records', '▤'], ['referrals', '/doctor/referrals', '↗']],
-    more: [['patients', '/doctor/patients', '♧'], ['schedule', '/doctor/schedule', '▦'], ['profile', '/doctor/profile', '◉']],
-  },
-  NURSE: {
-    primary: [['dashboard', '/nurse', '⌂'], ['todayPatients', '/nurse/today', '♧'], ['appointments', '/nurse/appointments', '▦'], ['profile', '/nurse/profile', '◉']],
-    more: [['vitals', '/nurse/vitals', '♡']],
-  },
-}
-
-function AppLayout({ children }) {
+export default function AppLayout({ children }) {
   const { user, isAuthenticated, logout } = useAuth()
   const { t, language, languages, changeLanguage } = useTranslation()
-  const location = useLocation()
+  const { pathname } = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [moreOpen, setMoreOpen] = useState(false)
+  const [collapsed, setCollapsed] = useState(readCollapsed)
+  const mainRef = useRef(null)
+  const previousPath = useRef(pathname)
 
   useEffect(() => {
     setSidebarOpen(false)
-    setMoreOpen(false)
-  }, [location.pathname])
+    if (previousPath.current !== pathname) {
+      mainRef.current?.focus({ preventScroll: true })
+      window.scrollTo({ top: 0, behavior: 'auto' })
+      previousPath.current = pathname
+    }
+  }, [pathname])
 
   useEffect(() => {
-    if (!sidebarOpen && !moreOpen) return undefined
-    const closeOnEscape = (event) => {
-      if (event.key !== 'Escape') return
-      setSidebarOpen(false)
-      setMoreOpen(false)
-    }
-    window.addEventListener('keydown', closeOnEscape)
-    return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [sidebarOpen, moreOpen])
-  const dashboard = isAuthenticated && user && !['/login', '/register'].includes(location.pathname) && !(isDevelopment && ['/dev', '/dev/login'].includes(location.pathname))
+    const media = window.matchMedia('(min-width: 901px)')
+    const close = () => { if (media.matches) setSidebarOpen(false) }
+    media.addEventListener('change', close)
+    return () => media.removeEventListener('change', close)
+  }, [])
 
-  if (!dashboard) {
-    return (
-      <div className="app-shell app-shell--public">
-        <header className="app-header public-header">
-          <Brand />
-          <LanguageSwitcher language={language} languages={languages} changeLanguage={changeLanguage} t={t} />
-        </header>
-        <main className="app-main">{children}</main>
-      </div>
-    )
-  }
+  const toggleCollapsed = () => setCollapsed((current) => {
+    const next = !current
+    try { window.localStorage.setItem('qamqormed.sidebar.collapsed', String(next)) } catch { /* Continue in memory. */ }
+    return next
+  })
+  const dashboard = isAuthenticated && user && !['/login', '/register'].includes(pathname) && !(isDevelopment && ['/dev', '/dev/login'].includes(pathname))
+  const skipLink = <a className="skip-link" href="#main-content" onClick={(event) => { event.preventDefault(); mainRef.current?.focus(); mainRef.current?.scrollIntoView({ block: 'start' }) }}>{t('accessibility.skipToContent')}</a>
+  const preferences = <><AccessibilitySettings /><ThemeSwitcher /><LanguageSwitcher language={language} languages={languages} changeLanguage={changeLanguage} t={t} /></>
 
-  const menu = user.role === 'ADMIN' ? adminMenuItems : menus[user.role] || []
-  const basePath = user.role === 'ADMIN' ? '/admin' : `/${user.role.toLowerCase()}`
-  const isActive = (path) => path === basePath ? location.pathname === path : location.pathname === path || location.pathname.startsWith(`${path}/`)
-  const activeMenu = menu.find(([, path]) => isActive(path))
-    || (user.role === 'PATIENT' && ['/patient/medical-record', '/patient/diagnoses', '/patient/prescriptions', '/patient/medications', '/patient/lab-results', '/patient/referrals', '/patient/certificates', '/patient/documents', '/patient/medical-history'].some((path) => location.pathname === path) ? menu.find(([key]) => key === 'documents') : null)
+  if (!dashboard) return <div className={`app-shell app-shell--public ${['/login', '/register'].includes(pathname) ? 'app-shell--auth' : ''}`}>
+    {skipLink}<header className="app-header public-header"><Brand /><div className="header-actions">{preferences}</div></header>
+    <main id="main-content" ref={mainRef} tabIndex={-1} className="app-main"><MotionRegion replayKey={pathname} variant="page" className="motion-route">{children}</MotionRegion></main><Footer />
+  </div>
 
-  return (
-    <div className="dashboard-layout">
-      {sidebarOpen && <button className="sidebar-backdrop" aria-label={t('common.close')} type="button" onClick={() => setSidebarOpen(false)} />}
-      {user.role === 'ADMIN' ? <AdminSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} /> : (
-        <aside id="app-sidebar" className={`dashboard-sidebar ${sidebarOpen ? 'dashboard-sidebar--open' : ''}`}>
-          <div className="sidebar-brand"><Brand /></div>
-          <div className="sidebar-role"><span>QamqorMed</span><strong>{t(`roles.${user.role}`)}</strong></div>
-          <nav className="sidebar-nav" aria-label={t('common.home')}>
-            {menu.map(([key, path, icon]) => {
-              const active = isActive(path)
-              return <button className={`sidebar-link ${active ? 'sidebar-link--active' : ''}`} aria-current={active ? 'page' : undefined} type="button" key={path} onClick={() => { navigate(path); setSidebarOpen(false) }}><span className="sidebar-link__icon" aria-hidden="true">{icon}</span><span>{t(`nav.${key}`)}</span></button>
-            })}
-          </nav>
-          <div className="sidebar-footer"><button className="sidebar-link sidebar-link--logout" type="button" onClick={() => logout()}><span className="sidebar-link__icon" aria-hidden="true">↪</span><span>{t('common.logout')}</span></button></div>
-        </aside>
-      )}
-      <div className="dashboard-main">
-        <header className="dashboard-header">
-          <button className="sidebar-toggle" type="button" aria-label={t('common.menu')} aria-expanded={sidebarOpen} aria-controls="app-sidebar" onClick={() => setSidebarOpen(true)}>☰</button>
-          <div className="header-context"><span>{t(`roles.${user.role}`)}</span><strong>{t(`nav.${activeMenu?.[0] || 'dashboard'}`)}</strong></div>
-          <div className="header-actions">
-            {user.role === 'PATIENT' && user.preferredCity && <button className="location-chip" type="button" onClick={() => navigate('/patient/location')} title={t('patient.changeCity')}>📍 {user.preferredCity.name}</button>}
-            <LanguageSwitcher language={language} languages={languages} changeLanguage={changeLanguage} t={t} compact />
-            <NotificationCenter />
-            <button className="profile-chip" type="button" onClick={() => navigate(`${basePath}/profile`)}><span className="profile-chip__avatar">{user.firstName?.[0]}{user.lastName?.[0]}</span><span className="profile-chip__name">{user.firstName} {user.lastName}</span></button>
-            <button className="header-logout" type="button" onClick={() => logout()}>{t('common.logout')}</button>
-          </div>
-        </header>
-        <main id="main-content" className="dashboard-content" tabIndex="-1">{children}</main>
-        {mobileMenus[user.role] && <MobileBottomNav role={user.role} pathname={location.pathname} menu={mobileMenus[user.role]} onMore={() => setMoreOpen((value) => !value)} moreOpen={moreOpen} t={t} />}
-        {mobileMenus[user.role] && moreOpen && <MobileMoreSheet role={user.role} menu={mobileMenus[user.role].more} pathname={location.pathname} onClose={() => setMoreOpen(false)} logout={logout} t={t} />}
-        {isDevelopment && <DevToolbar />}
-        <AiAssistant />
-      </div>
+  const basePath = `/${user.role.toLowerCase()}`
+  const currentTitle = t(workspaceSection(pathname, user.role))
+  const sidebarProps = { role: user.role, pathname, onNavigate: () => setSidebarOpen(false), onLogout: logout }
+  return <div className={`dashboard-layout workspace-layout ${collapsed ? 'workspace-layout--collapsed' : ''}`}>
+    {skipLink}
+    <div className="workspace-sidebar-slot"><WorkspaceSidebar {...sidebarProps} collapsed={collapsed} onCollapse={toggleCollapsed} /></div>
+    <Drawer id="mobile-sidebar" open={sidebarOpen} onClose={() => setSidebarOpen(false)} title={t('common.menu')} className="workspace-mobile-drawer"><WorkspaceSidebar {...sidebarProps} mobile /></Drawer>
+    <div className="dashboard-main">
+      <header className="dashboard-header workspace-header">
+        <button className="sidebar-toggle ui-icon-button" type="button" aria-label={t('common.menu')} aria-expanded={sidebarOpen} aria-controls="mobile-sidebar" onClick={() => setSidebarOpen(true)}><Icon name="menu" /></button>
+        <div className="workspace-header__context">
+          <nav className="workspace-breadcrumbs" aria-label={t('workspace.breadcrumbs')}><ol><li><AppLink href={basePath}>{t(`roles.${user.role}`)}</AppLink></li><li aria-hidden="true"><Icon name="chevron" size={12} /></li><li aria-current="page">{currentTitle}</li></ol></nav>
+          <strong>{currentTitle}</strong>
+        </div>
+        <div className="header-actions workspace-header__actions">
+          {user.role === 'PATIENT' && user.preferredCity && <AppLink className="workspace-location" href="/patient/location" title={t('patient.changeCity')}><Icon name="pin" size={16} /><span>{user.preferredCity.name}</span></AppLink>}
+          {preferences}<NotificationCenter />
+          <Popover label={t('workspace.userMenu')} className="workspace-user-menu" trigger={<><span className="profile-chip__avatar" aria-hidden="true">{user.firstName?.[0]}{user.lastName?.[0]}</span><span className="workspace-user-menu__name">{user.firstName} {user.lastName}</span><Icon name="down" size={14} /></>}>
+            <div className="workspace-user-menu__identity"><strong>{user.firstName} {user.lastName}</strong><span>{t(`roles.${user.role}`)}</span></div>
+            <AppLink href={`${basePath}/profile`}><Icon name="user" size={18} />{t('nav.profile')}</AppLink><AppLink href="/help"><Icon name="help" size={18} />{t('footer.help')}</AppLink>
+            <button type="button" data-close-popover onClick={logout}><Icon name="logout" size={18} />{t('common.logout')}</button>
+          </Popover>
+        </div>
+      </header>
+      <main id="main-content" ref={mainRef} className="dashboard-content" tabIndex={-1}><MotionRegion replayKey={pathname} variant="page" className="motion-route">{children}</MotionRegion></main>
+      <Footer />
+      <nav className="workspace-bottom-nav" aria-label={t('workspace.navigation')}>
+        {(workspaceMenus[user.role] || []).filter(([key]) => mobilePrimary[user.role]?.includes(key)).map(([key, path, icon]) => <AppLink key={path} href={path} className={isWorkspacePathActive(pathname, path, user.role) ? 'is-active' : ''} aria-current={isWorkspacePathActive(pathname, path, user.role) ? 'page' : undefined}><Icon name={icon} /><span>{t(`nav.${key}`)}</span></AppLink>)}
+        <button type="button" aria-expanded={sidebarOpen} aria-controls="mobile-sidebar" onClick={() => setSidebarOpen(true)}><Icon name="more" /><span>{t('nav.more')}</span></button>
+      </nav>
+      {isDevelopment && <DevToolbar />}<AiAssistant />
     </div>
-  )
+  </div>
 }
 
-function MobileBottomNav({ role, pathname, menu, onMore, moreOpen, t }) {
-  const active = (path) => path === `/${role.toLowerCase()}` ? pathname === path : pathname === path || pathname.startsWith(`${path}/`)
-  return (
-    <nav className="mobile-bottom-nav" aria-label={t('common.home')}>
-      {menu.primary.map(([key, path, icon]) => {
-        const isCurrent = active(path)
-        return <button className={`mobile-bottom-nav__item ${isCurrent ? 'is-active' : ''}`} type="button" key={path} aria-current={isCurrent ? 'page' : undefined} onClick={() => navigate(path)}><span className="mobile-bottom-nav__icon" aria-hidden="true">{icon}</span><span>{t(`nav.${key}`)}</span></button>
-      })}
-      <button className={`mobile-bottom-nav__item ${moreOpen ? 'is-active' : ''}`} type="button" aria-expanded={moreOpen} onClick={onMore}><span className="mobile-bottom-nav__icon" aria-hidden="true">⋯</span><span>{t('nav.more')}</span></button>
-    </nav>
-  )
+function LanguageSwitcher({ language, languages, changeLanguage, t }) {
+  return <Popover label={t('common.language')} className="language-menu preference-options" trigger={<>{languages.find((item) => item.code === language)?.shortLabel}<Icon name="down" size={12} /></>}>
+    <div className="preference-options__list" role="group" aria-label={t('common.language')}>{languages.map((item) => <button type="button" data-close-popover key={item.code} aria-pressed={language === item.code} onClick={() => changeLanguage(item.code)}>{item.label}</button>)}</div>
+  </Popover>
 }
-
-function MobileMoreSheet({ role, menu, pathname, onClose, logout, t }) {
-  const active = (path) => pathname === path || pathname.startsWith(`${path}/`)
-  return (
-    <div className="mobile-more-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-      <section className="mobile-more-sheet" role="dialog" aria-modal="true" aria-labelledby="mobile-more-title">
-        <div className="mobile-more-sheet__handle" aria-hidden="true" />
-        <div className="mobile-more-sheet__header"><h2 id="mobile-more-title">{t('nav.more')}</h2><button className="drawer-close" type="button" aria-label={t('common.close')} onClick={onClose}>×</button></div>
-        <nav className="mobile-more-sheet__nav" aria-label={t(`roles.${role}`)}>
-          {menu.map(([key, path, icon]) => { const isCurrent = active(path); return <button className={`mobile-more-sheet__link ${isCurrent ? 'is-active' : ''}`} type="button" key={path} aria-current={isCurrent ? 'page' : undefined} onClick={() => navigate(path)}><span className="mobile-bottom-nav__icon" aria-hidden="true">{icon}</span><span>{t(`nav.${key}`)}</span></button> })}
-          <button className="mobile-more-sheet__link mobile-more-sheet__link--logout" type="button" onClick={logout}><span className="mobile-bottom-nav__icon" aria-hidden="true">↪</span><span>{t('common.logout')}</span></button>
-        </nav>
-      </section>
-    </div>
-  )
-}
-
-function Brand() {
-  return <button className="brand-link" type="button" onClick={() => navigate('/')} aria-label="QamqorMed"><span className="brand-mark" aria-hidden="true">Q</span><span className="brand-name">QamqorMed</span></button>
-}
-
-function LanguageSwitcher({ language, languages, changeLanguage, t, compact = false }) {
-  return <label className={`language-switcher ${compact ? 'language-switcher--compact' : ''}`}><span className="sr-only">{t('common.language')}</span><select value={language} onChange={(event) => changeLanguage(event.target.value)} aria-label={t('common.language')}>{languages.map((item) => <option value={item.code} key={item.code}>{compact ? item.shortLabel : item.label}</option>)}</select></label>
-}
-
-export default AppLayout

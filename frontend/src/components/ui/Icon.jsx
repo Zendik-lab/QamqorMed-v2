@@ -1,0 +1,37 @@
+const paths = {
+  sparkles: 'm12 3 2.1 6.9L21 12l-6.9 2.1L12 21l-2.1-6.9L3 12l6.9-2.1ZM20 2v4m-2-2h4M4 18v4m-2-2h4',
+  eye: 'M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12m13 0a3 3 0 1 1-6 0 3 3 0 0 1 6 0',
+  eyeOff: 'm3 3 18 18M10.6 5.1 12 5c7 0 10 7 10 7a18 18 0 0 1-3 4M6.5 6.5A20 20 0 0 0 2 12s3 7 10 7a13 13 0 0 0 5.5-1.5M10 10a3 3 0 0 0 4 4',
+  lock: 'M5 10h14v12H5Zm3 0V6a4 4 0 0 1 8 0v4m-4 5v3',
+  home: 'm3 10 9-7 9 7M5 9v12h5v-7h4v7h5V9',
+  calendar: 'M8 2v4m8-4v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2m3 10h2m4 0h2m-8 4h2',
+  plus: 'M12 5v14M5 12h14',
+  clock: 'M12 8v4l3 2M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',
+  file: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Zm0 0v6h6M8 13h8m-8 4h5',
+  users: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2m20 0v-2a4 4 0 0 0-3-3.87M13 3.13a4 4 0 0 1 0 7.75M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0',
+  user: 'M20 21v-2a7 7 0 0 0-14 0v2M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0',
+  heart: 'M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8',
+  arrow: 'M7 17 17 7M7 7h10v10',
+  pin: 'M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0M15 10a3 3 0 1 1-6 0 3 3 0 0 1 6 0',
+  building: 'M3 22h18M5 22V4l7-2 7 2v18M9 7h1m4 0h1M9 11h1m4 0h1M9 15h1m4 0h1m-5 7v-3h4v3',
+  medical: 'M9 3h6v6h6v6h-6v6H9v-6H3V9h6Z',
+  menu: 'M3 6h18M3 12h18M3 18h18',
+  more: 'M5 12h.01M12 12h.01M19 12h.01',
+  close: 'm6 6 12 12M6 18 18 6',
+  collapse: 'M9 3v18M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2m11 6-3 3 3 3',
+  expand: 'M9 3v18M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2m8 6 3 3-3 3',
+  logout: 'M9 5H5v14h4m5-14 7 7-7 7m-5-7h12',
+  bell: 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 12a2 2 0 0 0 4 0',
+  chevron: 'm9 5 7 7-7 7',
+  down: 'm6 9 6 6 6-6',
+  search: 'M21 21l-5-5M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0',
+  check: 'm5 12 4 4L19 6',
+  info: 'M12 11v6m0-10h.01M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',
+  accessibility: 'M12 8v7m0-5-7-2m7 2 7-2m-7 7-4 6m4-6 4 6M14 4a2 2 0 1 1-4 0 2 2 0 0 1 4 0',
+  help: 'M9 8a3 3 0 1 1 5 2c-1 1-2 1-2 3m0 4h.01M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',
+  telegram: 'm22 2-7 20-5-9L1 9Zm0 0L10 13',
+}
+
+export default function Icon({ name, size = 20, ...props }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false" {...props}><path d={paths[name] || paths.file} /></svg>
+}

@@ -1,0 +1,128 @@
+.app-shell--public {
+  display: flex;
+  flex-direction: column;
+}
+
+.app-shell--public .app-main {
+  flex: 1;
+  min-height: calc(100dvh - 6rem);
+}
+
+button, select, input, textarea { color: inherit; }
+input, select, textarea { color: var(--text-primary); }
+input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: 1; }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--accent-solid); }
+a { color: var(--link); text-underline-offset: .2em; }
+select option { color: var(--text-primary); background: var(--surface); }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.ai-assistant { z-index: 95; }
+.drawer-backdrop, .staff-modal-backdrop { z-index: 100; }
+
+.theme-switcher {
+  position: relative;
+  display: inline-grid;
+  flex: 0 0 2.75rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: .75rem;
+  color: var(--link);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.theme-switcher:hover { background: var(--accent-soft); border-color: var(--accent-border); }
+.theme-switcher:focus-within { outline: 3px solid var(--focus); outline-offset: 3px; }
+.theme-switcher svg { pointer-events: none; }
+.theme-switcher select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+
+.site-footer {
+  flex-shrink: 0;
+  min-width: 0;
+  margin-top: auto;
+  padding: 2.75rem clamp(1rem, 3vw, 2.7rem) 2rem;
+  border-top: 1px solid var(--footer-border);
+  color: var(--footer-text);
+  background: var(--footer-bg);
+  font-size: .85rem;
+  line-height: 1.6;
+}
+
+.site-footer__grid, .site-footer__bottom { width: 100%; max-width: 1180px; margin-inline: auto; }
+.site-footer__grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, .9fr) minmax(0, 1fr) minmax(0, 1.2fr); gap: clamp(1rem, 2.5vw, 2.75rem); }
+.site-footer__grid > * { min-width: 0; }
+.site-footer .brand-name, .site-footer h2 { color: var(--footer-heading); }
+.site-footer .brand-link { min-height: 2.75rem; }
+.site-footer h2 { margin: .45rem 0 .9rem; font-size: .88rem; font-weight: 750; }
+.site-footer p { margin: .85rem 0 0; }
+.site-footer ul { padding: 0; margin: 0; list-style: none; }
+.site-footer li + li { margin-top: .15rem; }
+.site-footer a { color: inherit; text-decoration: none; overflow-wrap: anywhere; }
+.site-footer li a { display: inline-block; padding-block: .35rem; transition: color 160ms ease, text-decoration-color 160ms ease; }
+.site-footer a:hover { color: var(--link); text-decoration: underline; }
+.site-footer__external { margin-left: .35rem; color: var(--link); }
+.site-footer__availability { display: flex; align-items: flex-start; gap: .45rem; }
+.site-footer__availability > span { color: var(--link); }
+.site-footer__bottom { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem 2.5rem; margin-top: 2rem; padding-top: 1.25rem; border-top: 1px solid var(--footer-border); font-size: .76rem; }
+.site-footer__bottom p { margin: 0; }
+.site-footer__demo { display: flex; align-items: flex-start; gap: .45rem; max-width: 29rem; }
+.site-footer__demo > span { flex-shrink: 0; color: var(--link); }
+.help-page__cards { display: grid; gap: 1rem; }
+.help-page__cards h2 { margin-top: 0; font-size: 1.15rem; }
+.help-page__cards p { line-height: 1.7; color: var(--text-secondary); }
+
+/* Reserve space at the end of the document for floating development tools. */
+.dashboard-main .site-footer { padding-bottom: 6rem; }
+.dashboard-main:has(.dev-toolbar) .site-footer { padding-bottom: 11rem; }
+
+@media (max-width: 1200px) {
+  .dashboard-main .site-footer__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2rem; }
+  .header-actions { gap: .4rem; }
+  .profile-chip__name { display: none; }
+}
+
+@media (max-width: 900px) {
+  .site-footer__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2rem; }
+  .site-footer__bottom { flex-direction: column; }
+  .header-logout { display: none; }
+}
+
+@media (max-width: 700px) {
+  .dashboard-header { flex-wrap: wrap; gap: .4rem; }
+  .header-context { flex: 1; }
+  .header-actions { gap: .25rem; }
+  .notification-trigger { width: 2.75rem; height: 2.75rem; }
+  .profile-chip { min-width: 2.75rem; min-height: 2.75rem; }
+  .dashboard-content { padding-bottom: 2rem; }
+  .dashboard-main .site-footer { padding-bottom: calc(10rem + env(safe-area-inset-bottom)); }
+  .dashboard-main:has(.dev-toolbar) .site-footer { padding-bottom: calc(17rem + env(safe-area-inset-bottom)); }
+  .dashboard-main .dev-toolbar { bottom: calc(4.8rem + env(safe-area-inset-bottom)); flex-wrap: wrap; }
+  .site-footer li a { min-height: 2.75rem; padding-block: .65rem; }
+}
+
+@media (max-width: 600px) {
+  .site-footer, .dashboard-main .site-footer { padding-top: 2rem; }
+  .site-footer__grid, .dashboard-main .site-footer__grid { grid-template-columns: minmax(0, 1fr); gap: 1.5rem; }
+  .site-footer h2 { margin-bottom: .45rem; }
+  .site-footer__bottom { margin-top: 1.5rem; }
+  .app-shell--public .public-header { width: calc(100% - 2rem); gap: .5rem; }
+  .public-header .brand-link { gap: .4rem; }
+  .public-header .brand-name { font-size: .95rem; }
+  .public-header .language-switcher select { min-width: 3.8rem; padding-inline: .5rem; }
+  .dashboard-header .header-context { flex-basis: calc(100% - 3.5rem); }
+  .dashboard-header .header-context strong { max-width: 75vw; }
+  .dashboard-header .header-actions { justify-content: flex-end; width: 100%; }
+  .dashboard-header .header-actions > .language-switcher { margin-right: auto; }
+  .notification-center { position: static; }
+  .notification-panel { position: absolute; top: calc(100% + .5rem); max-height: calc(100dvh - 9rem); }
+  .ai-composer { padding-bottom: calc(.75rem + env(safe-area-inset-bottom)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
+
+@media print {
+  .site-footer, .theme-switcher, .dev-toolbar, .ai-launcher, .ai-assistant { display: none !important; }
+}

@@ -1,79 +1,35 @@
-import { useState } from 'react'
 import { useAuth } from '../auth/AuthContext.jsx'
 import { navigate } from '../utils/navigation.js'
 import { normalizePhone } from '../utils/phone.js'
-import { translateError, useTranslation } from '../i18n/index.jsx'
+import { useTranslation } from '../i18n/index.jsx'
+import AuthFrame from '../components/account/AuthFrame.jsx'
+import { PasswordInput, PasswordRequirements, useAccountForm } from '../components/account/AuthForm.jsx'
+import { Input } from '../components/ui/Fields.jsx'
+import { Alert, Button } from '../components/ui/Feedback.jsx'
+import AppLink from '../components/AppLink.jsx'
 
-const initialForm = { firstName: '', lastName: '', phone: '', password: '', confirmPassword: '' }
-
-function RegisterPage() {
+export default function RegisterPage() {
   const { register } = useAuth()
   const { t } = useTranslation()
-  const [form, setForm] = useState(initialForm)
-  const [error, setError] = useState('')
-  const [fieldErrors, setFieldErrors] = useState({})
-  const [submitting, setSubmitting] = useState(false)
-
-  const updateField = (event) => {
-    setForm((current) => ({ ...current, [event.target.name]: event.target.value }))
-    setError('')
-    setFieldErrors((current) => ({ ...current, [event.target.name]: '' }))
-  }
-
-  const submit = async (event) => {
-    event.preventDefault()
-    setError('')
-    setFieldErrors({})
-    setSubmitting(true)
-    try {
-      await register({ ...form, phone: normalizePhone(form.phone) })
-      navigate('/login?registered=1')
-    } catch (requestError) {
-      const message = translateError(requestError, t)
-      setError(message)
-      const fieldErrors = Object.fromEntries(Object.entries(requestError?.errors || {}).map(([field, value]) => [field, translateError({ message: String(value), status: requestError?.status }, t, 'errors.validation')]))
-      setFieldErrors(Object.keys(fieldErrors).length ? fieldErrors : { phone: message })
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  const field = (name, label, type = 'text', autoComplete = undefined) => (
-    <div className="field-group" key={name}>
-      <label className="field-label" htmlFor={`register-${name}`}>{label}</label>
-      <input
-        id={`register-${name}`}
-        name={name}
-        type={type}
-        autoComplete={autoComplete}
-        value={form[name]}
-        onChange={updateField}
-        required
-      />
-      {fieldErrors[name] && <span className="field-error">{fieldErrors[name]}</span>}
-    </div>
-  )
-
-  return (
-    <section className="form-card auth-card">
-      <div className="eyebrow">{t('auth.patientOnly')}</div>
-      <h1>{t('auth.createAccount')}</h1>
-      <p className="form-description">{t('auth.registrationRole')}</p>
-      {error && <p className="error-message" role="alert">{error}</p>}
-      <form onSubmit={submit} noValidate>
-        {field('firstName', t('auth.firstName'), 'text', 'given-name')}
-        {field('lastName', t('auth.lastName'), 'text', 'family-name')}
-        {field('phone', t('auth.phone'), 'tel', 'tel')}
-        {field('password', t('auth.password'), 'password', 'new-password')}
-        {field('confirmPassword', t('auth.confirmPassword'), 'password', 'new-password')}
-        <p className="hint-text">{t('auth.passwordHint')}</p>
-        <button className="button" type="submit" disabled={submitting}>
-          {submitting ? t('auth.creatingAccount') : t('auth.register')}
-        </button>
-      </form>
-      <p className="form-footer">{t('auth.alreadyAccount')} <button className="text-button" type="button" onClick={() => navigate('/login')}>{t('auth.signIn')}</button></p>
-    </section>
-  )
+  const form = useAccountForm({ firstName: '', lastName: '', phone: '', password: '', confirmPassword: '' }, 'register')
+  return <AuthFrame register title={t('auth.createAccount')} description={t('authFlow.registrationDescription')}>
+    <p className="auth-required-note">{t('authFlow.requiredNote')}</p>
+    {form.error && <div ref={form.summaryRef} tabIndex={-1}><Alert tone="danger">{form.error}</Alert></div>}
+    <form ref={form.formRef} noValidate aria-busy={form.busy} onSubmit={form.submit(async (values) => {
+      await register({ ...values, firstName: values.firstName.trim(), lastName: values.lastName.trim(), phone: normalizePhone(values.phone) })
+      navigate('/login?registered=1', { replace: true })
+    })}>
+      <fieldset disabled={form.busy} className="account-fieldset"><legend>{t('authFlow.personalGroup')}</legend>
+        <div className="auth-name-grid"><Input {...form.field('firstName')} label={t('auth.firstName')} autoComplete="given-name" maxLength={100} required /><Input {...form.field('lastName')} label={t('auth.lastName')} autoComplete="family-name" maxLength={100} required /></div>
+        <Input {...form.field('phone')} label={t('auth.phone')} type="tel" inputMode="tel" autoComplete="tel" placeholder="+7 700 123 45 67" hint={t('authFlow.phoneHint')} required />
+      </fieldset>
+      <fieldset disabled={form.busy} className="account-fieldset"><legend>{t('authFlow.securityGroup')}</legend>
+        <PasswordInput {...form.field('password')} label={t('auth.password')} autoComplete="new-password" maxLength={72} required />
+        <PasswordRequirements value={form.values.password} />
+        <PasswordInput {...form.field('confirmPassword')} label={t('auth.confirmPassword')} autoComplete="new-password" maxLength={72} required />
+      </fieldset>
+      <Button type="submit" busy={form.busy} className="auth-submit">{t(form.busy ? 'auth.creatingAccount' : 'auth.createAccount')}</Button>
+    </form>
+    <p className="auth-panel__switch">{t('auth.alreadyAccount')} <AppLink href="/login">{t('auth.signIn')}</AppLink></p>
+  </AuthFrame>
 }
-
-export default RegisterPage

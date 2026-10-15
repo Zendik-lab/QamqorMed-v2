@@ -1,39 +1,47 @@
+import { lazy, Suspense } from 'react'
 import AppLayout from './layouts/AppLayout.jsx'
 import { AuthProvider, useAuth } from './auth/AuthContext.jsx'
 import { pathForRole, ProtectedRoute, Redirect, RoleRoute } from './components/RouteGuards.jsx'
-import DashboardPage from './pages/DashboardPage.jsx'
-import AdminDashboardPage from './pages/AdminDashboardPage.jsx'
-import DoctorsPage from './pages/DoctorsPage.jsx'
-import DoctorDetailPage from './pages/DoctorDetailPage.jsx'
-import LoginPage from './pages/LoginPage.jsx'
-import RegisterPage from './pages/RegisterPage.jsx'
-import PlaceholderPage from './pages/PlaceholderPage.jsx'
-import ForbiddenPage from './pages/ForbiddenPage.jsx'
-import NotFoundPage from './pages/NotFoundPage.jsx'
-import DevPanelPage from './pages/DevPanelPage.jsx'
-import {
-  DependentDetailPage,
-  PatientAppointmentsPage,
-  PatientBookingPage,
-  PatientLocationPage,
-  PatientDependentsPage,
-  PatientMedicalHistoryPage,
-  PatientClinicalDataPage,
-  PatientDocumentsPage,
-  PatientProfilePage,
-} from './pages/PatientPages.jsx'
 import { isDevelopment } from './config/environment.js'
 import { useLocation } from './utils/navigation.js'
-import { I18nProvider } from './i18n/index.jsx'
-import { useTranslation } from './i18n/index.jsx'
-import StaffWorkflowPage from './pages/StaffWorkflowPages.jsx'
-import { DoctorProfilePage, NurseProfilePage } from './pages/StaffPages.jsx'
-import StaffCalendar from './components/calendar/StaffCalendar.jsx'
-import AdminSchedulePage from './pages/AdminSchedulePage.jsx'
-import AdminDocumentTemplatesPage from './pages/AdminDocumentTemplatesPage.jsx'
-import { DoctorPatientDetailPage, DoctorPatientsPage } from './pages/DoctorPatientsPages.jsx'
-import PatientWaitlistPage from './pages/PatientWaitlistPage.jsx'
-import { DoctorMedicalRecordsPage, DoctorReferralsPage, NurseTodayPage, NurseVitalsPage } from './pages/StaffSectionPages.jsx'
+import { I18nProvider, useTranslation } from './i18n/index.jsx'
+import RouteErrorBoundary from './components/RouteErrorBoundary.jsx'
+import { PageSkeleton } from './components/ui/Feedback.jsx'
+
+const DashboardPage = lazy(() => import('./pages/DashboardPage.jsx'))
+const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage.jsx'))
+const DoctorsPage = lazy(() => import('./pages/DoctorsPage.jsx'))
+const DoctorDetailPage = lazy(() => import('./pages/DoctorDetailPage.jsx'))
+const LoginPage = lazy(() => import('./pages/LoginPage.jsx'))
+const RegisterPage = lazy(() => import('./pages/RegisterPage.jsx'))
+const AdminProfilePage = lazy(() => import('./pages/AdminProfilePage.jsx'))
+const PlaceholderPage = lazy(() => import('./pages/PlaceholderPage.jsx'))
+const ForbiddenPage = lazy(() => import('./pages/ForbiddenPage.jsx'))
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage.jsx'))
+const DevPanelPage = isDevelopment ? lazy(() => import('./pages/DevPanelPage.jsx')) : null
+const StaffWorkflowPage = lazy(() => import('./pages/StaffWorkflowPages.jsx'))
+const StaffCalendar = lazy(() => import('./components/calendar/StaffCalendar.jsx'))
+const AdminSchedulePage = lazy(() => import('./pages/AdminSchedulePage.jsx'))
+const AdminDocumentTemplatesPage = lazy(() => import('./pages/AdminDocumentTemplatesPage.jsx'))
+const PatientWaitlistPage = lazy(() => import('./pages/PatientWaitlistPage.jsx'))
+const HelpPage = lazy(() => import('./pages/HelpPage.jsx'))
+const DependentDetailPage = lazy(() => import('./pages/PatientPages.jsx').then(module => ({ default: module.DependentDetailPage })))
+const PatientAppointmentsPage = lazy(() => import('./pages/PatientPages.jsx').then(module => ({ default: module.PatientAppointmentsPage })))
+const PatientBookingPage = lazy(() => import('./pages/PatientPages.jsx').then(module => ({ default: module.PatientBookingPage })))
+const PatientLocationPage = lazy(() => import('./pages/PatientPages.jsx').then(module => ({ default: module.PatientLocationPage })))
+const PatientDependentsPage = lazy(() => import('./pages/PatientPages.jsx').then(module => ({ default: module.PatientDependentsPage })))
+const PatientMedicalHistoryPage = lazy(() => import('./pages/PatientPages.jsx').then(module => ({ default: module.PatientMedicalHistoryPage })))
+const PatientClinicalDataPage = lazy(() => import('./pages/PatientPages.jsx').then(module => ({ default: module.PatientClinicalDataPage })))
+const PatientDocumentsPage = lazy(() => import('./pages/PatientPages.jsx').then(module => ({ default: module.PatientDocumentsPage })))
+const PatientProfilePage = lazy(() => import('./pages/PatientProfilePage.jsx'))
+const DoctorProfilePage = lazy(() => import('./pages/StaffPages.jsx').then(module => ({ default: module.DoctorProfilePage })))
+const NurseProfilePage = lazy(() => import('./pages/StaffPages.jsx').then(module => ({ default: module.NurseProfilePage })))
+const DoctorPatientDetailPage = lazy(() => import('./pages/DoctorPatientsPages.jsx').then(module => ({ default: module.DoctorPatientDetailPage })))
+const DoctorPatientsPage = lazy(() => import('./pages/DoctorPatientsPages.jsx').then(module => ({ default: module.DoctorPatientsPage })))
+const DoctorMedicalRecordsPage = lazy(() => import('./pages/StaffSectionPages.jsx').then(module => ({ default: module.DoctorMedicalRecordsPage })))
+const DoctorReferralsPage = lazy(() => import('./pages/StaffSectionPages.jsx').then(module => ({ default: module.DoctorReferralsPage })))
+const NurseTodayPage = lazy(() => import('./pages/StaffSectionPages.jsx').then(module => ({ default: module.NurseTodayPage })))
+const NurseVitalsPage = lazy(() => import('./pages/StaffSectionPages.jsx').then(module => ({ default: module.NurseVitalsPage })))
 
 function RoleDashboard({ role }) {
   return (
@@ -103,6 +111,8 @@ function AppContent() {
     // The development account picker is the pre-authentication entry point.
     // Only the workflow section inside the panel requires an ADMIN session.
     page = <DevPanelPage />
+  } else if (location.pathname === '/help') {
+    page = <HelpPage />
   } else if (needsPatientLocation) {
     page = <RolePage role="PATIENT"><PatientLocationPage /></RolePage>
   } else if (location.pathname === '/') {
@@ -171,7 +181,7 @@ function AppContent() {
   } else if (location.pathname === '/admin') {
     page = <RolePage role="ADMIN"><AdminDashboardPage /></RolePage>
   } else if (location.pathname === '/admin/profile') {
-    page = <RolePage role="ADMIN"><PlaceholderPage sectionKey="profile" role="ADMIN" /></RolePage>
+    page = <RolePage role="ADMIN"><AdminProfilePage /></RolePage>
   } else if (location.pathname === '/admin/schedule') {
     page = <RolePage role="ADMIN"><AdminSchedulePage /></RolePage>
   } else if (location.pathname === '/admin/document-templates') {
@@ -195,7 +205,7 @@ function AppContent() {
     page = isAuthenticated ? <NotFoundPage /> : <Redirect to="/login" />
   }
 
-  return <AppLayout>{page}</AppLayout>
+  return <AppLayout><RouteErrorBoundary key={location.pathname}><Suspense fallback={<PageSkeleton />}>{page}</Suspense></RouteErrorBoundary></AppLayout>
 }
 
 function App() {

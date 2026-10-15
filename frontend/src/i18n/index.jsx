@@ -5,8 +5,8 @@ export { createTranslator, languageKey, languages, localeFor, normalizeLanguage,
 const I18nContext = createContext(null)
 
 function initialLanguage() {
-  const saved = window.localStorage.getItem(languageKey)
-  return normalizeLanguage(saved || defaultLanguage)
+  try { return normalizeLanguage(window.localStorage.getItem(languageKey) || defaultLanguage) }
+  catch { return defaultLanguage }
 }
 
 export function I18nProvider({ children }) {
@@ -14,7 +14,7 @@ export function I18nProvider({ children }) {
 
   const changeLanguage = (nextLanguage) => {
     const normalized = normalizeLanguage(nextLanguage)
-    window.localStorage.setItem(languageKey, normalized)
+    try { window.localStorage.setItem(languageKey, normalized) } catch { /* Continue in memory. */ }
     setLanguageState(normalized)
   }
 

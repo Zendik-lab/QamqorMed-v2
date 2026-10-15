@@ -74,7 +74,7 @@ async function handleUnauthorized(path, token) {
 }
 
 async function request(path, options = {}) {
-  const { handleUnauthorized = true, ...fetchOptions } = options
+  const { handleUnauthorized: shouldHandleUnauthorized = true, ...fetchOptions } = options
   const token = getStoredToken()
   const headers = {
     Accept: 'application/json',
@@ -107,7 +107,7 @@ async function request(path, options = {}) {
       payload = {}
     }
 
-    if (response.status === 401 && handleUnauthorized) await handleUnauthorized(path, token)
+    if (response.status === 401 && shouldHandleUnauthorized) await handleUnauthorized(path, token)
 
     throw new ApiError(
       response.status,
@@ -121,7 +121,7 @@ async function request(path, options = {}) {
 }
 
 async function requestBlob(path, options = {}) {
-  const { handleUnauthorized = true, ...fetchOptions } = options
+  const { handleUnauthorized: shouldHandleUnauthorized = true, ...fetchOptions } = options
   const token = getStoredToken()
   const headers = { Accept: 'application/pdf', ...fetchOptions.headers }
   if (token && fetchOptions.auth !== false) headers.Authorization = `Bearer ${token}`
@@ -137,7 +137,7 @@ async function requestBlob(path, options = {}) {
     const text = await response.text()
     let payload = {}
     try { payload = text ? JSON.parse(text) : {} } catch { payload = {} }
-    if (response.status === 401 && handleUnauthorized) await handleUnauthorized(path, token)
+    if (response.status === 401 && shouldHandleUnauthorized) await handleUnauthorized(path, token)
     throw new ApiError(response.status, payload.message || `Request failed with status ${response.status}`, payload.errors || {})
   }
   return response.blob()
@@ -302,6 +302,12 @@ export const getAiConversations = () => request('/api/ai/conversations')
 export const createAiConversation = () => request('/api/ai/conversations', { method: 'POST' })
 export const getAiMessages = (conversationId) => request(`/api/ai/conversations/${conversationId}/messages`)
 export const deleteAiConversation = (conversationId) => request(`/api/ai/conversations/${conversationId}`, { method: 'DELETE' })
+export const getAiAvailableSlots = (doctorId, date, timeFrom, timeTo) => request(`/api/ai/doctors/${doctorId}/slots${queryString({ date, timeFrom, timeTo })}`)
+export const prepareAiAppointment = (body) => request('/api/ai/appointments/proposals', { method: 'POST', body: JSON.stringify(body) })
+export const confirmAiAppointment = (proposalId) => request(`/api/ai/appointments/proposals/${proposalId}/confirm`, { method: 'POST' })
+export const cancelAiAppointment = (proposalId) => request(`/api/ai/appointments/proposals/${proposalId}/cancel`, { method: 'POST' })
+export const confirmAiWaitlist = (proposalId) => request(`/api/ai/waitlist/proposals/${proposalId}/confirm`, { method: 'POST' })
+export const cancelAiWaitlist = (proposalId) => request(`/api/ai/waitlist/proposals/${proposalId}/cancel`, { method: 'POST' })
 
 export async function streamAiChat(body, { signal, onEvent, token: providedToken } = {}) {
   // Prefer the token from the already authenticated React session. The

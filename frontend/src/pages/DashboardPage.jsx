@@ -1,3 +1,4 @@
+import { EmptyState } from '../components/ui/Feedback.jsx'
 import { useEffect, useMemo, useState } from 'react'
 import {
   getDependents,
@@ -151,9 +152,6 @@ function QuickAction({ icon, title, description, onClick }) {
   return <button className="patient-quick-action" type="button" onClick={onClick}><span className="patient-icon patient-icon--soft">{icon}</span><span><strong>{title}</strong><small>{description}</small></span><span className="patient-quick-action__arrow">→</span></button>
 }
 
-function EmptyState({ title, description, action, onAction, compact = false }) {
-  return <div className={`empty-state patient-empty-state ${compact ? 'patient-empty-state--compact' : ''}`}><span className="patient-empty-state__icon">＋</span><h3>{title}</h3><p>{description}</p>{action && <button className="button button--secondary button--compact" type="button" onClick={onAction}>{action}</button>}</div>
-}
 
 function PatientDashboardSkeleton() {
   return <section className="page-shell patient-dashboard"><div className="patient-dashboard__skeleton-hero"><div><span className="skeleton skeleton--eyebrow" /><span className="skeleton skeleton--title" /><span className="skeleton skeleton--line" /></div><span className="skeleton skeleton--avatar" /></div><div className="patient-dashboard__columns"><div className="patient-card patient-skeleton-card"><span className="skeleton skeleton--line" /><span className="skeleton skeleton--title" /><span className="skeleton skeleton--line" /><span className="skeleton skeleton--line" /></div><div className="patient-card patient-skeleton-card"><span className="skeleton skeleton--line" /><span className="skeleton skeleton--title" /><span className="skeleton skeleton--line" /><span className="skeleton skeleton--line" /></div></div></section>
