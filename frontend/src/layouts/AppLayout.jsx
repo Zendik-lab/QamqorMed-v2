@@ -6,6 +6,7 @@ import { isDevelopment } from '../config/environment.js'
 import DevToolbar from '../components/DevToolbar.jsx'
 import AdminSidebar, { adminMenuItems } from '../components/AdminSidebar.jsx'
 import NotificationCenter from '../components/NotificationCenter.jsx'
+import AiAssistant from '../components/AiAssistant.jsx'
 
 const menus = {
   PATIENT: [
@@ -109,6 +110,7 @@ function AppLayout({ children }) {
         {mobileMenus[user.role] && <MobileBottomNav role={user.role} pathname={location.pathname} menu={mobileMenus[user.role]} onMore={() => setMoreOpen((value) => !value)} moreOpen={moreOpen} t={t} />}
         {mobileMenus[user.role] && moreOpen && <MobileMoreSheet role={user.role} menu={mobileMenus[user.role].more} pathname={location.pathname} onClose={() => setMoreOpen(false)} logout={logout} t={t} />}
         {isDevelopment && <DevToolbar />}
+        <AiAssistant />
       </div>
     </div>
   )

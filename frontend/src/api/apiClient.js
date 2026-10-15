@@ -271,6 +271,70 @@ export const getPatientSubjectAppointments = (patientId) => request(`/api/patien
 export const getPatientSubjectHistory = (patientId) => request(`/api/patients/${patientId}/medical-history`)
 export const getAppointmentResult = (appointmentId) => request(`/api/appointments/${appointmentId}/result`)
 
+export const getAiConversations = () => request('/api/ai/conversations')
+export const createAiConversation = () => request('/api/ai/conversations', { method: 'POST' })
+export const getAiMessages = (conversationId) => request(`/api/ai/conversations/${conversationId}/messages`)
+export const deleteAiConversation = (conversationId) => request(`/api/ai/conversations/${conversationId}`, { method: 'DELETE' })
+
+export async function streamAiChat(body, { signal, onEvent } = {}) {
+  const token = getStoredToken()
+  const headers = {
+    Accept: 'text/event-stream',
+    'Content-Type': 'application/json',
+  }
+  if (token) headers.Authorization = `Bearer ${token}`
+
+  let response
+  try {
+    response = await fetch(buildApiUrl('/api/ai/chat/stream'), {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal,
+    })
+  } catch (error) {
+    if (error?.name === 'AbortError') throw error
+    throw new ApiError(0, 'Network request failed', {}, 'network')
+  }
+
+  if (!response.ok) {
+    const text = await response.text()
+    let payload = {}
+    try { payload = text ? JSON.parse(text) : {} } catch { payload = {} }
+    if (response.status === 401) unauthorizedHandler?.()
+    throw new ApiError(response.status, payload.message || `Request failed with status ${response.status}`, payload.errors || {})
+  }
+
+  if (!response.body) throw new ApiError(0, 'Streaming is not supported', {}, 'network')
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  const dispatch = (eventText) => {
+    const data = eventText.split('\n')
+      .filter((line) => line.startsWith('data:'))
+      .map((line) => line.slice(5).trimStart())
+      .join('\n')
+    if (!data) return
+    try {
+      const payload = JSON.parse(data)
+      onEvent?.(payload.type, payload)
+    } catch {
+      // Ignore malformed transport fragments; the backend emits complete JSON events.
+    }
+  }
+
+  while (true) {
+    const { value, done } = await reader.read()
+    buffer += decoder.decode(value || new Uint8Array(), { stream: !done })
+    const events = buffer.split('\n\n')
+    buffer = events.pop() || ''
+    events.forEach(dispatch)
+    if (done) break
+  }
+  if (buffer.trim()) dispatch(buffer)
+}
+
 // These endpoints are the development-only account picker. They deliberately
 // work before normal authentication and must not turn an expected anonymous
 // request (or an expired token left in another tab) into a global logout.

@@ -22,6 +22,16 @@ spring:
 app:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  ai:
+    enabled: ${AI_ENABLED:true}
+    base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+    model: ${OLLAMA_MODEL:qwen3:8b}
+    num-ctx: ${OLLAMA_NUM_CTX:4096}
+    request-timeout: ${AI_REQUEST_TIMEOUT:45s}
+    max-message-length: ${AI_MAX_MESSAGE_LENGTH:4000}
+    max-history-messages: ${AI_MAX_HISTORY_MESSAGES:12}
+    max-concurrent-requests: ${AI_MAX_CONCURRENT_REQUESTS:2}
+    max-requests-per-minute: ${AI_MAX_REQUESTS_PER_MINUTE:20}
 
 logging:
   level:

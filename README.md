@@ -430,3 +430,43 @@ GET/POST/DELETE /api/admin/doctor-nurse-pairs[/{doctorId}]
 Frontend добавляет patient-разделы `/patient/diagnoses`, `/patient/prescriptions`, `/patient/medications`, выбор «я/подопечный», отображение структурированных медицинских данных и обновлённые workflow-статусы. Все patient/doctor/nurse/admin endpoint'ы защищены `SecurityConfig`; JWT role нельзя изменить через frontend. ИИН в DTO маскируется, пароли и password hash не возвращаются.
 
 В dev автоматически создаются `PatientProfile` для старых demo-пользователей и небольшой ICD-10 каталог. Demo-доступ остаётся прежним: `+77000000001 / Patient123!`, `+77000000002 / Doctor123!`, `+77000000003 / Nurse123!`, `+77000000004 / Admin123!`.
+
+## Этап 8: локальный QamqorMed AI
+
+AI-ассистент подключён отдельным пакетом `com.qamqormed.ai` и доступен только после JWT-аутентификации. Он не получает медицинские записи, не имеет инструментов для SQL/ОС/HTTP-действий и получает роль только из проверенного `AuthenticatedUser`.
+
+Backend API:
+
+```text
+GET    /api/ai/conversations
+POST   /api/ai/conversations
+GET    /api/ai/conversations/{id}/messages
+DELETE /api/ai/conversations/{id}
+POST   /api/ai/chat                 # обычный JSON fallback
+POST   /api/ai/chat/stream          # text/event-stream для интерфейса
+```
+
+История хранится в PostgreSQL таблицах `ai_conversations` и `ai_messages`. Миграция `V5__ai_conversations_and_messages.sql` аддитивная: существующие пациентские данные не удаляются и не переписываются. В dev-профиле таблицы создаются через Hibernate `ddl-auto: update`.
+
+Переменные окружения:
+
+```text
+AI_ENABLED=true
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=qwen3:8b
+OLLAMA_NUM_CTX=4096
+AI_REQUEST_TIMEOUT=45s
+AI_MAX_MESSAGE_LENGTH=4000
+AI_MAX_HISTORY_MESSAGES=12
+AI_MAX_CONCURRENT_REQUESTS=2
+AI_MAX_REQUESTS_PER_MINUTE=20
+```
+
+Локальный запуск модели:
+
+```powershell
+ollama serve
+ollama pull qwen3:8b
+```
+
+Ollama должна слушать только локальный интерфейс или защищённую внутреннюю сеть; её порт не следует публиковать в интернет. Если Ollama выключена, остальные разделы сайта продолжают работать, а AI показывает понятное сообщение о недоступности.
