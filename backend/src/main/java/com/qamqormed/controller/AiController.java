@@ -4,7 +4,12 @@ import com.qamqormed.dto.AiChatRequest;
 import com.qamqormed.dto.AiChatResponse;
 import com.qamqormed.dto.AiConversationResponse;
 import com.qamqormed.dto.AiMessageResponse;
+import com.qamqormed.dto.AiAppointmentProposalResponse;
+import com.qamqormed.dto.AiPrepareAppointmentRequest;
+import com.qamqormed.dto.AiPrepareWaitlistRequest;
+import com.qamqormed.dto.AiWaitlistProposalResponse;
 import com.qamqormed.security.AuthenticatedUser;
+import com.qamqormed.service.AiBookingService;
 import com.qamqormed.service.AiService;
 import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
@@ -12,8 +17,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
+import org.springframework.format.annotation.DateTimeFormat;
 
 import java.io.IOException;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
@@ -22,8 +29,15 @@ import java.util.concurrent.CompletableFuture;
 public class AiController {
 
     private final AiService aiService;
+    private final AiBookingService aiBookingService;
+    private final com.qamqormed.service.AiToolService aiToolService;
 
-    public AiController(AiService aiService) { this.aiService = aiService; }
+    public AiController(AiService aiService, AiBookingService aiBookingService,
+                        com.qamqormed.service.AiToolService aiToolService) {
+        this.aiService = aiService;
+        this.aiBookingService = aiBookingService;
+        this.aiToolService = aiToolService;
+    }
 
     @GetMapping("/conversations")
     public List<AiConversationResponse> conversations(@AuthenticationPrincipal AuthenticatedUser user) {
@@ -70,5 +84,53 @@ public class AiController {
                 .header("Cache-Control", "no-cache, no-transform")
                 .header("X-Accel-Buffering", "no")
                 .body(body);
+    }
+
+    @GetMapping("/doctors/{doctorId}/slots")
+    public com.qamqormed.dto.AiAvailableSlotsResponse availableSlots(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable Long doctorId,
+            @RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(value = "timeFrom", required = false) String timeFrom,
+            @RequestParam(value = "timeTo", required = false) String timeTo) {
+        return aiToolService.availableSlotsForUi(doctorId, date, timeFrom, timeTo);
+    }
+
+    @PostMapping("/appointments/proposals")
+    public AiAppointmentProposalResponse prepareAppointment(@AuthenticationPrincipal AuthenticatedUser user,
+                                                            @Valid @RequestBody AiPrepareAppointmentRequest request) {
+        return aiBookingService.prepareAppointment(user.getId(), request);
+    }
+
+    @PostMapping("/appointments/proposals/{proposalId}/confirm")
+    public AiAppointmentProposalResponse confirmAppointment(@AuthenticationPrincipal AuthenticatedUser user,
+                                                            @PathVariable Long proposalId) {
+        return aiBookingService.confirmAppointment(user.getId(), proposalId);
+    }
+
+    @PostMapping("/appointments/proposals/{proposalId}/cancel")
+    public ResponseEntity<Void> cancelAppointment(@AuthenticationPrincipal AuthenticatedUser user,
+                                                  @PathVariable Long proposalId) {
+        aiBookingService.cancelAppointment(user.getId(), proposalId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/waitlist/proposals")
+    public AiWaitlistProposalResponse prepareWaitlist(@AuthenticationPrincipal AuthenticatedUser user,
+                                                      @Valid @RequestBody AiPrepareWaitlistRequest request) {
+        return aiBookingService.prepareWaitlist(user.getId(), request);
+    }
+
+    @PostMapping("/waitlist/proposals/{proposalId}/confirm")
+    public AiWaitlistProposalResponse confirmWaitlist(@AuthenticationPrincipal AuthenticatedUser user,
+                                                      @PathVariable Long proposalId) {
+        return aiBookingService.confirmWaitlist(user.getId(), proposalId);
+    }
+
+    @PostMapping("/waitlist/proposals/{proposalId}/cancel")
+    public ResponseEntity<Void> cancelWaitlist(@AuthenticationPrincipal AuthenticatedUser user,
+                                               @PathVariable Long proposalId) {
+        aiBookingService.cancelWaitlist(user.getId(), proposalId);
+        return ResponseEntity.noContent().build();
     }
 }

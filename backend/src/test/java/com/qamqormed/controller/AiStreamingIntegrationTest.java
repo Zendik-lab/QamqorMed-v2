@@ -103,14 +103,14 @@ class AiStreamingIntegrationTest {
         AiMessage previous = new AiMessage();
         previous.setConversation(conversation);
         previous.setMessageType(AiMessage.MessageType.USER);
-        previous.setContent("previous history");
+        previous.setContent("Найди кардиолога");
         messages.save(previous);
         stubStream();
 
         MvcResult asyncResult = mockMvc.perform(post("/api/ai/chat/stream")
                         .header("Authorization", "Bearer " + jwtService.generateToken(user))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"conversationId\":" + conversation.getId() + ",\"message\":\"next message\",\"language\":\"en\"}"))
+                        .content("{\"conversationId\":" + conversation.getId() + ",\"message\":\"Тараз, на завтра\",\"language\":\"ru\"}"))
                 .andExpect(request().asyncStarted())
                 .andReturn();
 
@@ -120,8 +120,11 @@ class AiStreamingIntegrationTest {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<java.util.List<OllamaClient.OllamaMessage>> prompt =
                 ArgumentCaptor.forClass((Class) java.util.List.class);
-        verify(ollamaClient).stream(prompt.capture(), any());
-        assertTrue(prompt.getValue().stream().anyMatch(message -> "previous history".equals(message.content())));
+        verify(ollamaClient).streamWithTools(prompt.capture(), anyList(), any());
+        assertTrue(prompt.getValue().stream().anyMatch(message -> "Найди кардиолога".equals(message.content())));
+        assertTrue(prompt.getValue().stream().anyMatch(message -> "Тараз, на завтра".equals(message.content())));
+        assertTrue(prompt.getValue().stream().anyMatch(message -> message.content().contains("Текущая календарная дата клиники")));
+        assertTrue(prompt.getValue().stream().anyMatch(message -> message.content().contains("Asia/Almaty")));
     }
 
     @Test
@@ -147,10 +150,10 @@ class AiStreamingIntegrationTest {
 
     private void stubStream() {
         doAnswer(invocation -> {
-            Consumer<String> consumer = invocation.getArgument(1);
+            Consumer<String> consumer = invocation.getArgument(2);
             consumer.accept("Local answer");
-            return null;
-        }).when(ollamaClient).stream(anyList(), any());
+            return new OllamaClient.ToolStreamResult(java.util.List.of());
+        }).when(ollamaClient).streamWithTools(anyList(), anyList(), any());
     }
 
     private User user(String phone) {

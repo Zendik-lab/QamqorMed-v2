@@ -14,13 +14,11 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 
 @Service
 public class TimeSlotService {
-    private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Qyzylorda");
     private static final List<LocalTime> DEFAULT_STARTS = List.of(
             LocalTime.of(9, 0), LocalTime.of(9, 30), LocalTime.of(10, 0), LocalTime.of(10, 30),
             LocalTime.of(14, 0), LocalTime.of(14, 30), LocalTime.of(15, 0), LocalTime.of(15, 30));
@@ -28,9 +26,11 @@ public class TimeSlotService {
     private final TimeSlotRepository slots;
     private final DoctorProfileRepository doctors;
     private final ScheduleService schedules;
+    private final ClinicDateService dates;
 
-    public TimeSlotService(TimeSlotRepository slots, DoctorProfileRepository doctors, ScheduleService schedules) {
-        this.slots = slots; this.doctors = doctors; this.schedules = schedules;
+    public TimeSlotService(TimeSlotRepository slots, DoctorProfileRepository doctors, ScheduleService schedules,
+                           ClinicDateService dates) {
+        this.slots = slots; this.doctors = doctors; this.schedules = schedules; this.dates = dates;
     }
 
     @Transactional
@@ -38,13 +38,13 @@ public class TimeSlotService {
         DoctorProfile doctor = doctors.findById(doctorId)
                 .filter(d -> d.isActive() && d.getUser().isEnabled() && d.getClinic().isActive())
                 .orElseThrow(() -> new NotFoundException("Врач не найден"));
-        LocalDate today = LocalDate.now(CLINIC_ZONE);
+        LocalDate today = dates.today();
         LocalDate start = from == null || from.isBefore(today) ? today : from;
         LocalDate end = to == null ? start.plusDays(14) : to;
         if (end.isAfter(start.plusDays(31))) end = start.plusDays(31);
         var schedule = schedules.scheduleForDoctor(doctor);
         ensureSlots(doctor, schedule, start, end);
-        LocalDateTime fromAt = start.equals(today) ? LocalDateTime.now(CLINIC_ZONE) : start.atStartOfDay();
+        LocalDateTime fromAt = start.equals(today) ? dates.now() : start.atStartOfDay();
         return slots.findAvailable(doctorId, fromAt, end.plusDays(1).atStartOfDay()).stream().map(TimeSlotResponse::from).toList();
     }
 

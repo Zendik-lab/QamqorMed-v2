@@ -16,6 +16,7 @@ export const defaultLanguage = 'ru'
 // compatible with deployments that still ship the previous catalog version.
 const inlineTranslations = {
   'ai.open': { ru: 'Открыть QamqorMed AI', kk: 'QamqorMed AI ашу', en: 'Open QamqorMed AI' },
+  'ai.close': { ru: 'Закрыть AI-помощника', kk: 'AI-көмекшіні жабу', en: 'Close AI assistant' },
   'ai.shortTitle': { ru: 'AI-помощник', kk: 'AI-көмекші', en: 'AI assistant' },
   'ai.subtitle': { ru: 'Локальный помощник платформы', kk: 'Платформаның жергілікті көмекшісі', en: 'Local platform assistant' },
   'ai.newChat': { ru: 'Новый чат', kk: 'Жаңа чат', en: 'New chat' },
@@ -30,6 +31,24 @@ const inlineTranslations = {
   'ai.disclaimer': { ru: 'Не вводите персональные медицинские данные', kk: 'Жеке медициналық деректерді енгізбеңіз', en: 'Do not enter personal medical data' },
   'ai.unavailable': { ru: 'AI временно недоступен. Убедитесь, что Ollama запущена локально.', kk: 'AI уақытша қолжетімсіз. Ollama жергілікті іске қосылғанын тексеріңіз.', en: 'AI is temporarily unavailable. Make sure Ollama is running locally.' },
   'ai.historyError': { ru: 'Не удалось загрузить историю диалогов.', kk: 'Диалогтар тарихын жүктеу мүмкін болмады.', en: 'Conversation history could not be loaded.' },
+  'ai.doctorsFound': { ru: 'Найденные врачи', kk: 'Табылған дәрігерлер', en: 'Doctors found' },
+  'ai.noDoctors': { ru: 'Подходящих врачей не найдено.', kk: 'Сәйкес дәрігерлер табылмады.', en: 'No matching doctors found.' },
+  'ai.availableSlots': { ru: 'Свободное время', kk: 'Бос уақыт', en: 'Available times' },
+  'ai.noSlots': { ru: 'На выбранную дату свободных слотов нет.', kk: 'Таңдалған күнге бос уақыт жоқ.', en: 'No available slots for the selected date.' },
+  'ai.nextSlot': { ru: 'Ближайшее время', kk: 'Ең жақын уақыт', en: 'Next available' },
+  'ai.viewSlots': { ru: 'Показать время', kk: 'Уақытты көрсету', en: 'View times' },
+  'ai.subject': { ru: 'Пациент', kk: 'Пациент', en: 'Patient' },
+  'ai.bookForSelf': { ru: 'Записать себя', kk: 'Өзіме жазылу', en: 'Book for myself' },
+  'ai.subjects': { ru: 'Доступные пациенты', kk: 'Қолжетімді пациенттер', en: 'Available patients' },
+  'ai.self': { ru: 'Вы', kk: 'Сіз', en: 'You' },
+  'ai.dependent': { ru: 'Подопечный', kk: 'Қамқорлықтағы адам', en: 'Dependent' },
+  'ai.confirmAppointment': { ru: 'Подтвердите запись', kk: 'Жазылуды растаңыз', en: 'Confirm appointment' },
+  'ai.appointmentConfirmed': { ru: 'Запись подтверждена', kk: 'Жазылу расталды', en: 'Appointment confirmed' },
+  'ai.confirmWaitlist': { ru: 'Подтвердите добавление в лист ожидания', kk: 'Күту тізіміне қосуды растаңыз', en: 'Confirm waitlist request' },
+  'ai.waitlistConfirmed': { ru: 'Вы добавлены в лист ожидания', kk: 'Сіз күту тізіміне қосылдыңыз', en: 'Waitlist request confirmed' },
+  'ai.confirm': { ru: 'Подтвердить', kk: 'Растау', en: 'Confirm' },
+  'ai.cancel': { ru: 'Отмена', kk: 'Бас тарту', en: 'Cancel' },
+  'ai.toolError': { ru: 'Не удалось выполнить операцию.', kk: 'Операция орындалмады.', en: 'The operation could not be completed.' },
   'ai.suggestions.booking': { ru: 'Как записаться к врачу?', kk: 'Дәрігерге қалай жазыламын?', en: 'How do I book a doctor appointment?' },
   'ai.suggestions.documents': { ru: 'Где посмотреть мои медицинские документы?', kk: 'Медициналық құжаттарымды қайдан көремін?', en: 'Where can I find my medical documents?' },
   'ai.suggestions.health': { ru: 'Что важно знать о профилактике простуды?', kk: 'Суық тиюдің алдын алу туралы не білу керек?', en: 'What should I know about preventing a cold?' },
@@ -103,6 +122,7 @@ export function formatDate(value, language, options = {}) {
 }
 
 const knownBackendMessages = {
+  'Текущий пароль указан неверно': 'account.currentPasswordWrong',
   'Неверный телефон или пароль': 'errors.invalidCredentials',
   'Неверный номер телефона или пароль': 'errors.invalidCredentials',
   'Validation failed': 'errors.validation',

@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { getNotifications, getUnreadNotificationCount, markAllNotificationsRead, markNotificationRead } from '../api/apiClient.js'
 import { localeFor, translateError, useTranslation } from '../i18n/index.jsx'
 import { navigate } from '../utils/navigation.js'
+import Icon from './ui/Icon.jsx'
+import { usePresence } from '../motion/Motion.jsx'
 
 export default function NotificationCenter() {
   const { t, language } = useTranslation()
@@ -9,6 +11,9 @@ export default function NotificationCenter() {
   const [count, setCount] = useState(0)
   const [open, setOpen] = useState(false)
   const [error, setError] = useState('')
+  const panelRef = useRef(null)
+  const triggerRef = useRef(null)
+  const present = usePresence(open, panelRef)
 
   const refreshCount = () => getUnreadNotificationCount().then((value) => setCount(Number(value?.count || 0))).catch(() => {})
   const refresh = () => getNotifications().then((value) => { setItems(value || []); setCount((value || []).filter((item) => !item.read).length); setError('') }).catch((e) => setError(translateError(e, t)))
@@ -20,6 +25,14 @@ export default function NotificationCenter() {
   }, [])
 
   useEffect(() => { if (open) refresh() }, [open])
+  useEffect(() => {
+    if (!open) return undefined
+    const escape = (event) => { if (event.key === 'Escape') { setOpen(false); triggerRef.current?.focus() } }
+    const dismiss = (event) => { if (!panelRef.current?.contains(event.target) && !triggerRef.current?.contains(event.target)) setOpen(false) }
+    document.addEventListener('keydown', escape)
+    document.addEventListener('pointerdown', dismiss)
+    return () => { document.removeEventListener('keydown', escape); document.removeEventListener('pointerdown', dismiss) }
+  }, [open])
 
   const read = async (item) => {
     if (item.read) return
@@ -29,13 +42,13 @@ export default function NotificationCenter() {
   const openAction = async (item) => { await read(item); if (item.actionUrl) { setOpen(false); navigate(item.actionUrl) } }
 
   return <div className="notification-center">
-    <button className="notification-trigger" type="button" aria-label={t('notifications.title')} aria-expanded={open} onClick={() => setOpen((value) => !value)}>
-      <span aria-hidden="true">🔔</span>{count > 0 && <span className="notification-badge">{count > 99 ? '99+' : count}</span>}
+    <button ref={triggerRef} className="notification-trigger" type="button" aria-label={t('notifications.title')} aria-expanded={open} aria-controls="notification-panel" onClick={() => setOpen((value) => !value)}>
+      <Icon name="bell" />{count > 0 && <span className="notification-badge">{count > 99 ? '99+' : count}</span>}
     </button>
-    {open && <div className="notification-panel" role="dialog" aria-label={t('notifications.title')}>
+    {present && <div ref={panelRef} id="notification-panel" className="notification-panel" role="dialog" inert={!open} aria-label={t('notifications.title')}>
       <div className="notification-panel__header"><div><span className="eyebrow">QamqorMed</span><h2>{t('notifications.title')}</h2></div><button className="drawer-close" type="button" aria-label={t('common.close')} onClick={() => setOpen(false)}>×</button></div>
       {count > 0 && <button className="text-button notification-read-all" type="button" onClick={readAll}>{t('notifications.readAll')}</button>}
-      {error && <p className="error-message">{error}</p>}
+      {error && <p className="error-message" role="alert">{error}</p>}
       <div className="notification-list">{items.length ? items.map((item) => <article className={`notification-item ${item.read ? '' : 'notification-item--unread'}`} key={item.id}>
         <button className="notification-item__body" type="button" onClick={() => openAction(item)}><strong>{item.title}</strong><span>{item.message}</span><time dateTime={item.createdAt}>{new Intl.DateTimeFormat(localeFor(language), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(item.createdAt))}</time></button>
         <div className="notification-item__actions">{!item.read && <button className="text-button" type="button" onClick={() => read(item)}>{t('notifications.markRead')}</button>}{item.actionUrl && <button className="text-button" type="button" onClick={() => openAction(item)}>{t('notifications.open')}</button>}</div>

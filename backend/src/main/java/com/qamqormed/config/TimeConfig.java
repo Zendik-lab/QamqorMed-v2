@@ -10,6 +10,6 @@ import java.time.ZoneId;
 public class TimeConfig {
     @Bean
     Clock applicationClock() {
-        return Clock.system(ZoneId.of("Asia/Qyzylorda"));
+        return Clock.system(ZoneId.of("Asia/Almaty"));
     }
 }

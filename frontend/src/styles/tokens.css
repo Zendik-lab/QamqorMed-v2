@@ -1,0 +1,202 @@
+/* Shared semantic palette for every workspace, including portalled dialogs. */
+:root {
+  /* Type and spacing use rem so the accessibility text scale affects layout. */
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --text-xs: .75rem;
+  --text-sm: .875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: clamp(1.75rem, 3vw, 2.5rem);
+  --leading-tight: 1.25;
+  --leading-normal: 1.6;
+  --space-1: .25rem;
+  --space-2: .5rem;
+  --space-3: .75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --radius-sm: .5rem;
+  --radius-md: .75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+  --radius-full: 999px;
+  --shadow-sm: 0 2px 8px rgb(var(--shadow-rgb) / .04);
+  --shadow-md: 0 8px 28px rgb(var(--shadow-rgb) / .07);
+  --shadow-lg: 0 20px 60px rgb(var(--shadow-rgb) / .16);
+  --duration-fast: 140ms;
+  --duration-normal: 220ms;
+  --duration-slow: 360ms;
+  --ease-standard: cubic-bezier(.2, .7, .2, 1);
+  --ease-exit: cubic-bezier(.4, 0, 1, 1);
+  --z-header: 30;
+  --z-sidebar: 40;
+  --z-dropdown: 60;
+  --z-assistant: 95;
+  --z-overlay: 100;
+  --z-toast: 120;
+  --sidebar-width: 260px;
+  --sidebar-compact-width: 84px;
+  /* CSS custom properties cannot be used in media query conditions.
+     Keep literal queries aligned with these documented breakpoints. */
+  --breakpoint-mobile: 600px;
+  --breakpoint-tablet: 900px;
+  --breakpoint-wide: 1200px;
+  --page-bg: #f4f8fb;
+  --surface: #ffffff;
+  --surface-rgb: 255 255 255;
+  --surface-subtle: #f5f9fa;
+  --surface-hover: #edf4f5;
+  --input-bg: #fbfdfe;
+  --text-primary: #17324d;
+  --text-secondary: #36586c;
+  --text-muted: #556c7b;
+  --text-disabled: #7b8e99;
+  --border: #dce8ed;
+  --border-strong: #7a8fa3;
+  --link: #185db8;
+  --accent-solid: #2366c1;
+  --accent-solid-hover: #194f99;
+  --accent-soft: #edf4ff;
+  --accent-border: #a3c2ec;
+  --secondary-text: #096d73;
+  --secondary-solid: #087c82;
+  --secondary-soft: #e5f6f4;
+  --focus: #185db8;
+  --focus-rgb: 35 102 193;
+  --accent-glow-rgb: 105 199 189;
+  --success-text: #1f6c46;
+  --success-solid: #277957;
+  --success-soft: #eaf8f0;
+  --success-border: #9cd5b7;
+  --warning-text: #795411;
+  --warning-solid: #9a6a16;
+  --warning-soft: #fff5dc;
+  --warning-border: #dfc58f;
+  --danger-text: #a03434;
+  --danger-solid: #b64444;
+  --danger-soft: #fff1f1;
+  --danger-border: #e8baba;
+  --info-text: #215c7c;
+  --info-solid: #376e96;
+  --info-soft: #eaf3fa;
+  --info-border: #b3cddd;
+  --violet-text: #65518e;
+  --violet-solid: #7565a1;
+  --violet-soft: #f1edfa;
+  --violet-border: #c3b7df;
+  --ai-launcher-start: var(--accent-solid);
+  --ai-launcher-end: #6c51b1;
+  --ai-glow-rgb: 91 91 190;
+  --text-on-accent: #ffffff;
+  --text-on-accent-muted: #eafbf8;
+  --on-accent-rgb: 255 255 255;
+  --hero-start: #12394b;
+  --hero-end: #126b70;
+  --shadow-rgb: 26 66 92;
+  --overlay-rgb: 18 32 47;
+  --footer-bg: #ecf3f5;
+  --footer-text: #3b5665;
+  --footer-heading: #17324d;
+  --footer-border: #d1e0e5;
+  /* Compatibility with the existing booking/calendar token names. */
+  --line: var(--border);
+  --ink: var(--text-primary);
+  --muted: var(--text-muted);
+  --accent: var(--accent-solid);
+  --accent-strong: var(--link);
+}
+
+@media screen {
+  :root[data-theme="dark"] {
+    --page-bg: #141a20;
+    --surface: #1d252e;
+    --surface-rgb: 29 37 46;
+    --surface-subtle: #222d37;
+    --surface-hover: #2a3742;
+    --input-bg: #182129;
+    --text-primary: #e8eff5;
+    --text-secondary: #c1d0db;
+    --text-muted: #a0b3c1;
+    --text-disabled: #758b9a;
+    --border: #35434f;
+    --border-strong: #6c8499;
+    --link: #9bc7ff;
+    --accent-solid: #285fa8;
+    --accent-solid-hover: #22518f;
+    --accent-soft: #21344e;
+    --accent-border: #4d76a7;
+    --secondary-text: #8bddd5;
+    --secondary-solid: #176e74;
+    --secondary-soft: #203d40;
+    --focus: #9bc7ff;
+    --focus-rgb: 155 199 255;
+    --accent-glow-rgb: 39 100 101;
+    --success-text: #94dfb7;
+    --success-solid: #286d50;
+    --success-soft: #213e32;
+    --success-border: #4f856c;
+    --warning-text: #f2d18c;
+    --warning-solid: #805b20;
+    --warning-soft: #403522;
+    --warning-border: #8b7145;
+    --danger-text: #ffb2b2;
+    --danger-solid: #ac414b;
+    --danger-soft: #432a31;
+    --danger-border: #965c66;
+    --info-text: #a4cfee;
+    --info-solid: #356689;
+    --info-soft: #24394b;
+    --info-border: #4e7590;
+    --violet-text: #cbbcf0;
+    --violet-solid: #655283;
+    --violet-soft: #362e49;
+    --violet-border: #786b9a;
+    --ai-launcher-end: #6751a3;
+    --ai-glow-rgb: 124 108 210;
+    --hero-start: #12323d;
+    --hero-end: #155f66;
+    --shadow-rgb: 0 0 0;
+    --overlay-rgb: 0 0 0;
+    --footer-bg: #11171d;
+    --footer-text: #a9bdca;
+    --footer-heading: #e8eff5;
+    --footer-border: #303e48;
+  }
+}
+
+/* Explicit contrast preferences complement both palettes. */
+@media screen {
+  :root[data-contrast="high"] {
+    --text-primary: #0b223c;
+    --text-secondary: #163957;
+    --text-muted: #294661;
+    --border: #6b829a;
+    --border-strong: #486780;
+    --link: #064b9e;
+    --input-bg: #ffffff;
+  }
+  :root[data-theme="dark"][data-contrast="high"] {
+    --text-primary: #ffffff;
+    --text-secondary: #edf4ff;
+    --text-muted: #dae6f5;
+    --border: #91a8bf;
+    --border-strong: #bfd1e2;
+    --link: #bddaff;
+    --input-bg: #111c29;
+  }
+  :root[data-text-size="large"] { font-size: 120%; }
+}
+
+/* Medical documents retain the default light palette when printed. */
+@media print {
+  :root[data-theme] {
+    color-scheme: light !important;
+    color: var(--text-primary);
+    background: var(--page-bg);
+  }
+}

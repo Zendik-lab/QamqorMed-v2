@@ -20,7 +20,7 @@ import java.util.stream.Collectors;
 
 @Service
 public class ScheduleService {
-    public static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Qyzylorda");
+    public static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Almaty");
     private final DoctorScheduleRepository schedules;
     private final DoctorProfileRepository doctors;
     private final AppointmentRepository appointments;

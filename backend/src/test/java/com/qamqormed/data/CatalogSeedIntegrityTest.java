@@ -1,12 +1,15 @@
 package com.qamqormed.data;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.qamqormed.entity.DoctorNurseAssignment;
 import com.qamqormed.entity.ClinicSpecialty;
 import com.qamqormed.entity.DoctorProfile;
 import com.qamqormed.entity.NurseProfile;
 import com.qamqormed.entity.Role;
+import com.qamqormed.entity.City;
 import com.qamqormed.dto.DataIntegrityAuditResponse;
 import com.qamqormed.repository.*;
+import com.qamqormed.service.AiToolService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -16,6 +19,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Set;
+import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -44,6 +48,8 @@ class CatalogSeedIntegrityTest {
     @Autowired PasswordEncoder passwordEncoder;
     @Autowired DevDataInitializer initializer;
     @Autowired com.qamqormed.service.DataIntegrityAuditService integrityAudit;
+    @Autowired AiToolService aiTools;
+    @Autowired ObjectMapper objectMapper;
 
     @Test
     @Transactional
@@ -90,5 +96,17 @@ class CatalogSeedIntegrityTest {
         assertEquals(expectedPairs, doctors.countByDemoTrueAndActiveTrue());
         assertEquals(expectedPairs, nurses.countByDemoTrueAndActiveTrue());
         assertEquals(expectedPairs, assignments.findAll().stream().filter(DoctorNurseAssignment::isActive).count());
+    }
+
+    @Test
+    void aiAcceptsEveryDatabaseCityNameInAllStoredLanguages() {
+        var patient = users.findByPhone("+77000000001").orElseThrow();
+        for (City city : cities.findAllPublic()) {
+            for (String name : List.of(city.getName(), city.getNameRu(), city.getNameKk(), city.getNameEn()).stream().distinct().toList()) {
+                var arguments = objectMapper.createObjectNode().put("city", name);
+                AiToolService.AiToolExecutionResult result = aiTools.execute(patient.getId(), Role.PATIENT, "search_doctors", arguments);
+                assertTrue(result.success(), city.getName() + " / " + name + ": " + result.message());
+            }
+        }
     }
 }

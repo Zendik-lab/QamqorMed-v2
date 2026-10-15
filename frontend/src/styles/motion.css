@@ -1,0 +1,108 @@
+/* QamqorMed motion: short, finite entrances and state transitions. Content is
+   visible by default; animation failure never hides data or disables controls. */
+:root { --motion-step: 25ms; }
+.motion-region { min-width: 0; }
+.motion-route { width: 100%; }
+.motion-route > .page-shell, .account-identity { animation: motion-fade var(--duration-normal) var(--ease-standard); }
+
+/* Stable shell: only a deliberate sidebar resize changes its geometry. */
+.workspace-sidebar-slot { transition: width var(--duration-normal) var(--ease-standard); }
+.workspace-layout .dashboard-main { transition: margin-left var(--duration-normal) var(--ease-standard); }
+.workspace-sidebar__nav { position: relative; }
+.workspace-active-indicator { position: absolute; z-index: 1; top: 0; left: 0; width: 3px; height: 1px; border-radius: 3px; background: var(--accent-solid); transform-origin: top; pointer-events: none; transition: transform var(--duration-normal) var(--ease-standard), opacity var(--duration-fast); }
+.workspace-nav-link__tooltip, .ui-tooltip__label { opacity: 0; transition: opacity var(--duration-fast) var(--ease-standard); }
+.workspace-nav-link:is(:hover, :focus-visible) .workspace-nav-link__tooltip,
+.ui-tooltip:is(:hover, :focus-within):not(.is-dismissed) .ui-tooltip__label { opacity: 1; }
+.workspace-sidebar:not(.is-collapsed) .workspace-nav-link__label { animation: motion-fade var(--duration-fast) var(--ease-standard); }
+.workspace-bottom-nav > .is-active { animation: motion-fade var(--duration-normal); }
+.ui-popover[open] > .ui-popover__panel { animation: none; transform-origin: top right; }
+.ui-dialog[open] { animation: none; }
+.ui-dialog[open]::backdrop { animation: motion-fade var(--duration-normal) var(--ease-standard); }
+.ui-dialog[data-closing="true"]::backdrop { animation: motion-fade var(--duration-fast) var(--ease-exit) reverse both; }
+
+.theme-menu > summary, .language-menu > summary { width: auto; min-width: 44px; padding-inline: .7rem; gap: .4rem; }
+.language-menu > summary { min-width: 64px; font-size: var(--text-sm); font-weight: 650; }
+.preference-options > .ui-popover__panel { width: 15rem; }
+.preference-options__list { display: grid; gap: .3rem; }
+.preference-options__list > button { display: flex; align-items: center; gap: .65rem; min-height: 44px; padding: .6rem; border: 1px solid transparent; border-radius: var(--radius-sm); color: var(--text-secondary); background: transparent; text-align: left; }
+.preference-options__list > button[aria-pressed="true"] { color: var(--link); background: var(--accent-soft); border-color: var(--accent-border); }
+.preference-options__list > button:hover { background: var(--surface-hover); }
+.theme-menu__icon { display: inline-flex; animation: motion-panel var(--duration-normal) var(--ease-standard); }
+
+/* Surface and text colours transition together; no universal transition: all. */
+body, .app-shell, .dashboard-main, .workspace-header, .workspace-sidebar,
+.workspace-bottom-nav, .ui-popover__panel, .notification-panel, .ai-assistant,
+.ui-dialog, .ui-card, .patient-card, .account-section, .account-identity,
+.auth-panel, .auth-story, .staff-metric, .admin-stat-card, .info-card {
+  transition-property: background-color, color, border-color;
+  transition-duration: var(--duration-normal);
+  transition-timing-function: var(--ease-standard);
+}
+/* Keep the explicit sidebar geometry transition alongside colour changes. */
+.workspace-layout .dashboard-main { transition-property: margin-left, background-color, color; }
+.workspace-sidebar-slot { transition-property: width; }
+h1, h2, h3, p, dt, dd, .field-label, .status, .ui-badge { transition: color var(--duration-normal), background-color var(--duration-normal), border-color var(--duration-normal); }
+
+:is(.button, .ui-button, .ui-icon-button, .patient-quick-action, .date-card, .calendar-day, .slot-button, .month-day, .calendar-arrow, .notification-trigger, .ai-composer button) {
+  transition: transform var(--duration-fast) var(--ease-standard), color var(--duration-fast), background-color var(--duration-fast), border-color var(--duration-fast), box-shadow var(--duration-fast);
+}
+:is(.button, .ui-button, .ui-icon-button, .patient-quick-action, .date-card, .calendar-day, .slot-button, .calendar-arrow, .notification-trigger, .ai-composer button):active:not(:disabled) { transform: scale(.98); }
+:is(.date-card, .calendar-day, .slot-button).is-selected { animation: motion-panel var(--duration-fast) var(--ease-standard); }
+@media (hover: hover) and (pointer: fine) {
+  :is(.patient-quick-action, .staff-metric, .admin-stat-card, .info-card):hover { transform: translateY(-2px); }
+}
+.staff-metric, .admin-stat-card, .info-card { transition: transform var(--duration-fast) var(--ease-standard), background-color var(--duration-normal), border-color var(--duration-fast); }
+
+/* Animate a bounded group, never every table cell/calendar cell. */
+:is(.patient-dashboard__columns, .staff-metrics, .admin-stat-grid, .info-grid) > :nth-child(-n+4) { animation: motion-rise var(--duration-normal) var(--ease-standard) backwards; }
+:is(.patient-dashboard__columns, .staff-metrics, .admin-stat-grid, .info-grid) > :nth-child(2) { animation-delay: var(--motion-step); }
+:is(.patient-dashboard__columns, .staff-metrics, .admin-stat-grid, .info-grid) > :nth-child(3) { animation-delay: calc(var(--motion-step) * 2); }
+:is(.patient-dashboard__columns, .staff-metrics, .admin-stat-grid, .info-grid) > :nth-child(4) { animation-delay: calc(var(--motion-step) * 3); }
+:is(.patient-appointment-list, .patient-medical-grid, .doctor-records-grid, .referral-list, .queue-list, .document-list, .record-timeline, .records-section, .medical-timeline, .date-card-grid, .slot-grid, .template-grid, .mini-schedule, .ui-table-scroll, .admin-table, .directory-table, .calendar-empty-banner, .staff-calendar-state, .schedule-state) { animation: motion-fade var(--duration-normal) var(--ease-standard); }
+:is(.account-editor, .account-security form, .workflow-subform, .visit-result, .drawer-assessment, .ai-history, .referral-document, .document-preview, .document-viewer, .document-composer__panel, .date-calendar, .admin-schedule-editor, .staff-modal, .appointment-drawer) { animation: motion-rise var(--duration-normal) var(--ease-standard); }
+.staff-modal-backdrop, .drawer-backdrop { animation: motion-fade var(--duration-fast); }
+:is(.ui-empty, .ui-error-state, .empty-state, .error-message, .success-message, .ui-alert, .ui-field__error, .success-panel, .ai-error) { animation: motion-fade var(--duration-fast) var(--ease-standard); }
+.ui-tabs [role="tabpanel"]:not([hidden]), .record-tab-panel { animation: motion-fade var(--duration-normal) var(--ease-standard); }
+.medical-tabs button, .document-category-tabs button, .subject-tabs button, .filter-pills button, .ui-tabs__list button { transition: color var(--duration-fast), background-color var(--duration-fast), border-color var(--duration-fast); }
+.notification-badge { animation: motion-panel var(--duration-fast) var(--ease-standard); }
+.notification-item { transition: background-color var(--duration-normal), border-color var(--duration-normal); }
+.ui-toast { bottom: calc(1rem + env(safe-area-inset-bottom)); animation: none; }
+.ui-toast .ui-alert { animation: none; }
+
+/* Auth is immediately interactive. Only four field groups are staggered. */
+.auth-panel > header { animation: motion-rise var(--duration-normal) var(--ease-standard); }
+.auth-panel .account-fieldset > :nth-child(-n+4) { animation: motion-rise var(--duration-normal) var(--ease-standard) backwards; }
+.auth-panel .account-fieldset > :nth-child(2) { animation-delay: var(--motion-step); }
+.auth-panel .account-fieldset > :nth-child(3) { animation-delay: calc(var(--motion-step) * 2); }
+.auth-panel .account-fieldset > :nth-child(4) { animation-delay: calc(var(--motion-step) * 3); }
+.auth-story::before { content: ''; position: absolute; top: -4rem; right: -3rem; width: 13rem; height: 13rem; border: 1px solid var(--accent-border); border-radius: 50%; pointer-events: none; animation: motion-decoration var(--duration-slow) var(--ease-standard); }
+.auth-submit[aria-busy="true"] { transform: none; }
+.ui-field:focus-within .field-label { color: var(--link); }
+
+/* Skeletons use opacity, not moving large background images. */
+.ui-skeleton, .skeleton { animation: motion-skeleton 1.4s ease-in-out infinite alternate; }
+.ui-spinner, .dev-spinner { animation-duration: 800ms; }
+.ai-message:nth-last-child(-n+2) { animation: motion-rise var(--duration-fast) var(--ease-standard); }
+.ai-assistant, .notification-panel { transform-origin: bottom right; }
+.ai-typing { display: inline-flex; gap: .25rem; }
+.ai-typing__label { margin-left: .5rem; font-size: var(--text-xs); color: var(--text-muted); }
+.motion-table-results { min-width: 0; }
+
+@keyframes motion-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes motion-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes motion-panel { from { opacity: 0; transform: translateY(4px) scale(.99); } to { opacity: 1; transform: none; } }
+@keyframes motion-decoration { from { opacity: .4; transform: translate(8px, -6px); } to { opacity: 1; transform: none; } }
+@keyframes motion-skeleton { from { opacity: .55; } to { opacity: 1; } }
+@media (max-width: 900px) {
+  .workspace-layout .dashboard-main { transition-property: background-color, color; }
+}
+@media (max-width: 700px) {
+  :root { --motion-step: 0ms; }
+  .ui-toast { bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
+  .auth-story::before { animation: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  :is(.button, .ui-button, .ui-icon-button, .patient-quick-action, .date-card, .calendar-day, .slot-button, .calendar-arrow, .staff-metric, .admin-stat-card, .info-card):is(:hover, :active) { transform: none; }
+}
+@media print { *, *::before, *::after { animation: none !important; transition: none !important; } }

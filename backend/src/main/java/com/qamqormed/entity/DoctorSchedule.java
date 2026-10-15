@@ -11,7 +11,7 @@ public class DoctorSchedule {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
     @OneToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "doctor_id", nullable = false, unique = true) private DoctorProfile doctor;
     @Column(name = "slot_duration_minutes", nullable = false) private int slotDurationMinutes = 30;
-    @Column(name = "time_zone", nullable = false, length = 60) private String timeZone = "Asia/Qyzylorda";
+    @Column(name = "time_zone", nullable = false, length = 60) private String timeZone = "Asia/Almaty";
     @Column(nullable = false) private boolean active = true;
     @OneToMany(mappedBy = "schedule", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<DoctorScheduleInterval> intervals = new ArrayList<>();

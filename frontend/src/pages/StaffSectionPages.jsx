@@ -1,3 +1,4 @@
+import { Input as Field, TextArea, Select } from '../components/ui/Fields.jsx'
 import { useEffect, useMemo, useState } from 'react'
 import {
   addDoctorReferral,
@@ -97,6 +98,3 @@ function SectionHeader({ eyebrow, title, description, action }) { return <div cl
 function Stat({ label, value }) { return <div className="section-stat"><span>{label}</span><strong>{value}</strong></div> }
 function Loading({ t }) { return <div className="staff-calendar-state"><span className="loading-dot" /><p>{t('common.loading')}</p></div> }
 function Empty({ title, description }) { return <div className="empty-state staff-section-empty"><h2>{title}</h2><p>{description}</p></div> }
-function Field({ label, value, onChange, type = 'text', step, disabled = false }) { return <label className="field-group"><span className="field-label">{label}</span><input type={type} step={step} value={value ?? ''} onChange={onChange} disabled={disabled} /></label> }
-function TextArea({ label, value, onChange, disabled = false }) { return <label className="field-group"><span className="field-label">{label}</span><textarea rows="3" value={value ?? ''} onChange={onChange} disabled={disabled} /></label> }
-function Select({ label, value, onChange, options, required = false, emptyLabel }) { return <label className="field-group"><span className="field-label">{label}</span><select value={value ?? ''} onChange={onChange} required={required}><option value="">{emptyLabel || '—'}</option>{options.map(([optionValue, optionLabel]) => <option key={optionValue} value={optionValue}>{optionLabel}</option>)}</select></label> }
