@@ -32,6 +32,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -193,6 +194,36 @@ class AuthSecurityIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"phone\":\"+77001234567\",\"password\":\"Password123!\"}"))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void aiHistoryRequiresAuthenticationAndIsolatedByOwner() throws Exception {
+        registerPatient();
+        String firstToken = login(PATIENT_PHONE, "Password123!");
+
+        String conversationBody = mockMvc.perform(post("/api/ai/conversations")
+                        .header("Authorization", "Bearer " + firstToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").exists())
+                .andReturn().getResponse().getContentAsString();
+        long conversationId = tools.jackson.databind.json.JsonMapper.builder().build()
+                .readTree(conversationBody).path("id").asLong();
+
+        createUser("+77001234569", Role.PATIENT);
+        String secondToken = login("+77001234569", "Password123!");
+
+        mockMvc.perform(get("/api/ai/conversations")
+                        .header("Authorization", "Bearer " + secondToken))
+                .andExpect(status().isOk())
+                .andExpect(content().json("[]"));
+        mockMvc.perform(get("/api/ai/conversations/{id}/messages", conversationId)
+                        .header("Authorization", "Bearer " + secondToken))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(delete("/api/ai/conversations/{id}", conversationId)
+                        .header("Authorization", "Bearer " + secondToken))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/ai/conversations"))
+                .andExpect(status().isUnauthorized());
     }
 
     private void registerPatient() throws Exception {
