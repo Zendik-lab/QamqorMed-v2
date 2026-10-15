@@ -1,6 +1,8 @@
 package com.qamqormed.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 
@@ -24,7 +26,10 @@ public class AiMessage {
     @Column(name = "message_type", nullable = false, length = 20)
     private MessageType messageType;
 
-    @Lob
+    // The Flyway schema stores this value as PostgreSQL text, not as an OID
+    // large object. Mapping it as LONGVARCHAR avoids PgClob access after the
+    // repository transaction has ended (notably on the async SSE worker).
+    @JdbcTypeCode(SqlTypes.LONGVARCHAR)
     @Column(nullable = false, columnDefinition = "text")
     private String content;
 

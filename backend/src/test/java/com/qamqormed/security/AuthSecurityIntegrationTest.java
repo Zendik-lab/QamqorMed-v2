@@ -18,6 +18,8 @@ import com.qamqormed.repository.PrescriptionRepository;
 import com.qamqormed.repository.MedicationPrescriptionRepository;
 import com.qamqormed.repository.LabResultRepository;
 import com.qamqormed.repository.MedicalCertificateRepository;
+import com.qamqormed.repository.AiConversationRepository;
+import com.qamqormed.repository.AiMessageRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,7 +29,13 @@ import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
 
+import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.Date;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -86,9 +94,15 @@ class AuthSecurityIntegrationTest {
     private LabResultRepository labResults;
     @Autowired
     private MedicalCertificateRepository certificates;
+    @Autowired
+    private AiMessageRepository aiMessages;
+    @Autowired
+    private AiConversationRepository aiConversations;
 
     @BeforeEach
     void cleanUsers() {
+        aiMessages.deleteAll();
+        aiConversations.deleteAll();
         medicalDocuments.deleteAll();
         referrals.deleteAll();
         treatments.deleteAll();
@@ -226,6 +240,30 @@ class AuthSecurityIntegrationTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void aiEndpointAcceptsValidJwtAndRejectsMissingOrExpiredJwt() throws Exception {
+        registerPatient();
+        String validToken = login(PATIENT_PHONE, "Password123!");
+
+        mockMvc.perform(get("/api/ai/conversations")
+                        .header("Authorization", "Bearer " + validToken))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/ai/conversations"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/ai/conversations")
+                        .header("Authorization", "Bearer " + expiredToken(PATIENT_PHONE)))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/ai/chat/stream")
+                        .header("Authorization", "Bearer " + validToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"message\":\"hello\",\"language\":\"en\"}"))
+                .andExpect(status().isServiceUnavailable());
+        mockMvc.perform(post("/api/ai/chat/stream")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"message\":\"hello\",\"language\":\"en\"}"))
+                .andExpect(status().isUnauthorized());
+    }
+
     private void registerPatient() throws Exception {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -260,5 +298,17 @@ class AuthSecurityIntegrationTest {
             throw new AssertionError("Login response did not contain accessToken");
         }
         return matcher.group(1);
+    }
+
+    private String expiredToken(String phone) {
+        SecretKey key = Keys.hmacShaKeyFor(
+                "test-secret-that-is-at-least-32-characters-long".getBytes(StandardCharsets.UTF_8));
+        Instant expiredAt = Instant.now().minusSeconds(60);
+        return Jwts.builder()
+                .subject(phone)
+                .issuedAt(Date.from(expiredAt.minusSeconds(60)))
+                .expiration(Date.from(expiredAt))
+                .signWith(key)
+                .compact();
     }
 }

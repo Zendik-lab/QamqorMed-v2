@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "check:i18n": "node scripts/check-i18n.mjs",
-    "test": "npm run check:i18n"
+    "test:ai-auth": "node --test scripts/test-ai-auth.mjs",
+    "test": "npm run check:i18n && npm run test:ai-auth"
   },
   "dependencies": {
     "react": "^19.1.1",

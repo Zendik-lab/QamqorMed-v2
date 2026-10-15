@@ -15,6 +15,8 @@ spring:
 app:
   cors:
     allowed-origins: http://localhost:5173
+  ai:
+    enabled: false
   jwt:
     secret: test-secret-that-is-at-least-32-characters-long
     expiration: 7200000

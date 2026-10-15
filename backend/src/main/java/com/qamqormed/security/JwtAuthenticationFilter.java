@@ -23,6 +23,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     @Override
+    protected boolean shouldNotFilterAsyncDispatch() {
+        // StreamingResponseBody resumes through an ASYNC dispatch. Stateless
+        // security does not persist the SecurityContext between dispatches,
+        // so validate the bearer token again before Spring Security authorizes
+        // the resumed request.
+        return false;
+    }
+
+    @Override
     protected void doFilterInternal(
             HttpServletRequest request,
             HttpServletResponse response,

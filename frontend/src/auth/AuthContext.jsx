@@ -42,9 +42,16 @@ export function AuthProvider({ children }) {
       .then((user) => {
         setState({ user, token, isAuthenticated: true, loading: false })
       })
-      .catch(() => {
-        clearStoredToken()
-        setState({ user: null, token: null, isAuthenticated: false, loading: false })
+      .catch((error) => {
+        if (error?.status === 401) {
+          clearStoredToken()
+          setState({ user: null, token: null, isAuthenticated: false, loading: false })
+          return
+        }
+        // A backend/network/AI-adjacent failure is not proof that the JWT is
+        // invalid. Keep the token so a transient outage cannot log the user
+        // out or destroy the current session.
+        setState((current) => ({ ...current, token, loading: false }))
       })
 
     return () => setUnauthorizedHandler(null)
@@ -58,7 +65,7 @@ export function AuthProvider({ children }) {
     try {
       currentUser = await getCurrentUser()
     } catch (error) {
-      clearStoredToken()
+      if (error?.status === 401) clearStoredToken()
       throw error
     }
     setState({

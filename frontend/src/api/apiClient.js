@@ -1,3 +1,5 @@
+import { confirmSessionAndNotify, withBearerToken } from './authSession.js'
+
 function normalizeApiBase(value) {
   const normalized = String(value || '').trim().replace(/\/+$/, '')
   if (!normalized || normalized === '/api') return ''
@@ -17,6 +19,7 @@ function buildApiUrl(path) {
 }
 
 let unauthorizedHandler = null
+let sessionCheckPromise = null
 
 export class ApiError extends Error {
   constructor(status, message, errors = {}, code = null) {
@@ -42,6 +45,32 @@ export function clearStoredToken() {
 
 export function setUnauthorizedHandler(handler) {
   unauthorizedHandler = handler
+}
+
+async function handleUnauthorized(path, token) {
+  // An anonymous request has no authenticated browser session to terminate.
+  if (!token) return
+
+  // /api/auth/me is the canonical session check. Its own 401 is conclusive;
+  // all other endpoints must be confirmed through it before global logout.
+  if (path === '/api/auth/me') {
+    unauthorizedHandler?.()
+    return
+  }
+
+  if (!sessionCheckPromise) {
+    const check = confirmSessionAndNotify({
+      sessionUrl: buildApiUrl('/api/auth/me'),
+      token,
+      getCurrentToken: getStoredToken,
+      onInvalid: () => unauthorizedHandler?.(),
+    })
+    const pending = check.finally(() => {
+      if (sessionCheckPromise === pending) sessionCheckPromise = null
+    })
+    sessionCheckPromise = pending
+  }
+  await sessionCheckPromise
 }
 
 async function request(path, options = {}) {
@@ -78,9 +107,7 @@ async function request(path, options = {}) {
       payload = {}
     }
 
-    if (response.status === 401 && handleUnauthorized) {
-      unauthorizedHandler?.()
-    }
+    if (response.status === 401 && handleUnauthorized) await handleUnauthorized(path, token)
 
     throw new ApiError(
       response.status,
@@ -110,7 +137,7 @@ async function requestBlob(path, options = {}) {
     const text = await response.text()
     let payload = {}
     try { payload = text ? JSON.parse(text) : {} } catch { payload = {} }
-    if (response.status === 401 && handleUnauthorized) unauthorizedHandler?.()
+    if (response.status === 401 && handleUnauthorized) await handleUnauthorized(path, token)
     throw new ApiError(response.status, payload.message || `Request failed with status ${response.status}`, payload.errors || {})
   }
   return response.blob()
@@ -276,19 +303,23 @@ export const createAiConversation = () => request('/api/ai/conversations', { met
 export const getAiMessages = (conversationId) => request(`/api/ai/conversations/${conversationId}/messages`)
 export const deleteAiConversation = (conversationId) => request(`/api/ai/conversations/${conversationId}`, { method: 'DELETE' })
 
-export async function streamAiChat(body, { signal, onEvent } = {}) {
-  const token = getStoredToken()
-  const headers = {
+export async function streamAiChat(body, { signal, onEvent, token: providedToken } = {}) {
+  // Prefer the token from the already authenticated React session. The
+  // storage fallback keeps this API usable from non-React callers and older
+  // integrations while ensuring streaming uses the same bearer value as the
+  // rest of the authenticated UI.
+  const token = providedToken || getStoredToken()
+  const headers = withBearerToken({
     Accept: 'text/event-stream',
     'Content-Type': 'application/json',
-  }
-  if (token) headers.Authorization = `Bearer ${token}`
+  }, token)
 
   let response
   try {
     response = await fetch(buildApiUrl('/api/ai/chat/stream'), {
       method: 'POST',
       headers,
+      credentials: 'same-origin',
       body: JSON.stringify(body),
       signal,
     })
@@ -301,7 +332,7 @@ export async function streamAiChat(body, { signal, onEvent } = {}) {
     const text = await response.text()
     let payload = {}
     try { payload = text ? JSON.parse(text) : {} } catch { payload = {} }
-    if (response.status === 401) unauthorizedHandler?.()
+    if (response.status === 401) await handleUnauthorized('/api/ai/chat/stream', token)
     throw new ApiError(response.status, payload.message || `Request failed with status ${response.status}`, payload.errors || {})
   }
 

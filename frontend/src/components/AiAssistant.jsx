@@ -21,7 +21,7 @@ function makeId(prefix) {
 }
 
 function AiAssistant() {
-  const { user, isAuthenticated } = useAuth()
+  const { user, token, isAuthenticated } = useAuth()
   const { t, language } = useTranslation()
   const [open, setOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -117,6 +117,7 @@ function AiAssistant() {
 
     try {
       await streamAiChat({ conversationId, message, language }, {
+        token,
         signal: controller.signal,
         onEvent: (type, payload) => {
           if (type === 'meta') setConversationId(payload.conversationId)
