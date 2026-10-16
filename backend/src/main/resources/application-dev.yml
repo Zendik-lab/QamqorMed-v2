@@ -25,6 +25,8 @@ app:
   ai:
     enabled: ${AI_ENABLED:true}
     base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+    basic-auth-username: ${OLLAMA_BASIC_AUTH_USERNAME:}
+    basic-auth-password: ${OLLAMA_BASIC_AUTH_PASSWORD:}
     model: ${OLLAMA_MODEL:qwen3:8b}
     num-ctx: ${OLLAMA_NUM_CTX:4096}
     request-timeout: ${AI_REQUEST_TIMEOUT:45s}

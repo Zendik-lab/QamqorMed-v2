@@ -10,6 +10,8 @@ public class AiProperties {
 
     private boolean enabled = true;
     private URI baseUrl = URI.create("http://localhost:11434");
+    private String basicAuthUsername = "";
+    private String basicAuthPassword = "";
     private String model = "qwen3:8b";
     private int numCtx = 4096;
     private Duration requestTimeout = Duration.ofSeconds(45);
@@ -22,6 +24,10 @@ public class AiProperties {
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
     public URI getBaseUrl() { return baseUrl; }
     public void setBaseUrl(URI baseUrl) { this.baseUrl = baseUrl; }
+    public String getBasicAuthUsername() { return basicAuthUsername; }
+    public void setBasicAuthUsername(String basicAuthUsername) { this.basicAuthUsername = basicAuthUsername; }
+    public String getBasicAuthPassword() { return basicAuthPassword; }
+    public void setBasicAuthPassword(String basicAuthPassword) { this.basicAuthPassword = basicAuthPassword; }
     public String getModel() { return model; }
     public void setModel(String model) { this.model = model; }
     public int getNumCtx() { return numCtx; }

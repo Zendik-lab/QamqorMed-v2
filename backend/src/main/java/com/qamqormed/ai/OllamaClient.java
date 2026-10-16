@@ -10,6 +10,7 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -98,6 +99,14 @@ public final class OllamaClient {
         connection.setDoOutput(true);
         connection.setRequestProperty("Content-Type", "application/json");
         connection.setRequestProperty("Accept", "application/json");
+        connection.setRequestProperty("ngrok-skip-browser-warning", "true");
+        String username = properties.getBasicAuthUsername();
+        String password = properties.getBasicAuthPassword();
+        if (username != null && !username.isBlank() && password != null && !password.isBlank()) {
+            String credentials = username + ":" + password;
+            String encodedCredentials = Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8));
+            connection.setRequestProperty("Authorization", "Basic " + encodedCredentials);
+        }
         try (java.io.OutputStream output = connection.getOutputStream()) {
             output.write(objectMapper.writeValueAsBytes(payload));
         }
