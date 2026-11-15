@@ -52,6 +52,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class AuthSecurityIntegrationTest {
 
     private static final String PATIENT_PHONE = "+77001234567";
+    private static final String TEST_JWT_SECRET = "test-secret-that-is-at-least-32-characters-long";
     private static final Pattern TOKEN_PATTERN = Pattern.compile("\\\"accessToken\\\":\\\"([^\\\"]+)\\\"");
 
     @Autowired
@@ -200,6 +201,50 @@ class AuthSecurityIntegrationTest {
     }
 
     @Test
+    void allRolesLoginWithDatabaseRoleAndOnlyReachTheirOwnEndpoints() throws Exception {
+        Role[] roles = {Role.PATIENT, Role.DOCTOR, Role.NURSE, Role.ADMIN};
+        String[] phones = {"+77001234601", "+77001234602", "+77001234603", "+77001234604"};
+        String[] endpoints = {"/api/patient/test", "/api/doctor/test", "/api/nurse/test", "/api/admin/test"};
+
+        for (int i = 0; i < roles.length; i++) {
+            createUser(phones[i], roles[i]);
+        }
+
+        for (int userIndex = 0; userIndex < roles.length; userIndex++) {
+            String token = login(phones[userIndex], "Password123!");
+            org.junit.jupiter.api.Assertions.assertEquals(roles[userIndex].name(), roleClaim(token));
+
+            for (int endpointIndex = 0; endpointIndex < endpoints.length; endpointIndex++) {
+                var result = mockMvc.perform(get(endpoints[endpointIndex])
+                                .header("Authorization", "Bearer " + token))
+                        .andReturn();
+                org.junit.jupiter.api.Assertions.assertEquals(
+                        endpointIndex == userIndex ? 200 : 403,
+                        result.getResponse().getStatus(),
+                        roles[userIndex] + " access to " + endpoints[endpointIndex]
+                );
+            }
+        }
+    }
+
+    @Test
+    void incorrectPasswordAndUnknownPhoneAreRejected() throws Exception {
+        createUser("+77001234605", Role.DOCTOR);
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"phone\":\"+77001234605\",\"password\":\"WrongPassword123!\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Неверный номер телефона или пароль"));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"phone\":\"+77001234606\",\"password\":\"Password123!\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Неверный номер телефона или пароль"));
+    }
+
+    @Test
     void rejectsUnconfiguredLanOriginBeforeLogin() throws Exception {
         registerPatient();
 
@@ -302,7 +347,7 @@ class AuthSecurityIntegrationTest {
 
     private String expiredToken(String phone) {
         SecretKey key = Keys.hmacShaKeyFor(
-                "test-secret-that-is-at-least-32-characters-long".getBytes(StandardCharsets.UTF_8));
+                TEST_JWT_SECRET.getBytes(StandardCharsets.UTF_8));
         Instant expiredAt = Instant.now().minusSeconds(60);
         return Jwts.builder()
                 .subject(phone)
@@ -310,5 +355,10 @@ class AuthSecurityIntegrationTest {
                 .expiration(Date.from(expiredAt))
                 .signWith(key)
                 .compact();
+    }
+
+    private String roleClaim(String token) {
+        SecretKey key = Keys.hmacShaKeyFor(TEST_JWT_SECRET.getBytes(StandardCharsets.UTF_8));
+        return Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload().get("role", String.class);
     }
 }
