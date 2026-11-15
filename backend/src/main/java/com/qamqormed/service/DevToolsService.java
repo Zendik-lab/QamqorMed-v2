@@ -23,7 +23,6 @@ import com.qamqormed.repository.DoctorProfileRepository;
 import com.qamqormed.repository.NurseProfileRepository;
 import com.qamqormed.repository.UserRepository;
 import org.springframework.context.annotation.Profile;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -52,9 +51,13 @@ import java.util.function.Function;
 @Profile("dev")
 public class DevToolsService {
     private static final int MAX_PAGE_SIZE = 100;
-    private static final java.util.Set<String> LEGACY_DEMO_PHONES = java.util.Set.of(
-            "+77000000001", "+77000000002", "+77000000003", "+77000000004"
+    private static final Map<String, String> LEGACY_DEMO_PASSWORDS = Map.of(
+            "+77000000001", "Patient123!",
+            "+77000000002", "Doctor123!",
+            "+77000000003", "Nurse123!",
+            "+77000000004", "Admin123!"
     );
+    private static final String GENERATED_STAFF_PASSWORD = "DemoStaff123!";
 
     private final UserRepository users;
     private final DoctorProfileRepository doctors;
@@ -62,33 +65,19 @@ public class DevToolsService {
     private final DoctorNurseAssignmentRepository assignments;
     private final MedicalStructureService structure;
     private final AuthService authService;
-    private final Map<String, String> demoPasswordsByPhone;
-    private final String demoStaffPassword;
 
     public DevToolsService(UserRepository users,
                            DoctorProfileRepository doctors,
                            NurseProfileRepository nurses,
                            DoctorNurseAssignmentRepository assignments,
                            MedicalStructureService structure,
-                           AuthService authService,
-                           @Value("${app.dev.demo-patient-password:}") String demoPatientPassword,
-                           @Value("${app.dev.demo-doctor-password:}") String demoDoctorPassword,
-                           @Value("${app.dev.demo-nurse-password:}") String demoNursePassword,
-                           @Value("${app.dev.demo-admin-password:}") String demoAdminPassword,
-                           @Value("${app.dev.demo-staff-password:}") String demoStaffPassword) {
+                           AuthService authService) {
         this.users = users;
         this.doctors = doctors;
         this.nurses = nurses;
         this.assignments = assignments;
         this.structure = structure;
         this.authService = authService;
-        this.demoPasswordsByPhone = Map.of(
-                "+77000000001", demoPatientPassword,
-                "+77000000002", demoDoctorPassword,
-                "+77000000003", demoNursePassword,
-                "+77000000004", demoAdminPassword
-        );
-        this.demoStaffPassword = demoStaffPassword;
     }
 
     @Transactional(readOnly = true)
@@ -236,7 +225,7 @@ public class DevToolsService {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(criteria.equal(root.get("role"), role));
             predicates.add(criteria.isTrue(root.get("enabled")));
-            predicates.add(root.get("phone").in(LEGACY_DEMO_PHONES));
+            predicates.add(root.get("phone").in(LEGACY_DEMO_PASSWORDS.keySet()));
             addUserSearch(predicates, criteria, root, search);
             query.orderBy(criteria.asc(root.get("lastName")), criteria.asc(root.get("firstName")));
             return criteria.and(predicates.toArray(Predicate[]::new));
@@ -394,14 +383,14 @@ public class DevToolsService {
     }
 
     private boolean isLegacyDemoUser(User user) {
-        return user != null && LEGACY_DEMO_PHONES.contains(user.getPhone());
+        return user != null && LEGACY_DEMO_PASSWORDS.containsKey(user.getPhone());
     }
 
     private DevLoginCredentials credentials(User user, boolean demo) {
         if (!demo || user == null || user.getPhone() == null) return null;
-        String password = demoPasswordsByPhone.get(user.getPhone());
+        String password = LEGACY_DEMO_PASSWORDS.get(user.getPhone());
         if (password == null && (user.getRole() == Role.DOCTOR || user.getRole() == Role.NURSE)) {
-            password = demoStaffPassword;
+            password = GENERATED_STAFF_PASSWORD;
         }
         return password == null ? null : new DevLoginCredentials(user.getPhone(), password);
     }

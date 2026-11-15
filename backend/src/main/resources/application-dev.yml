@@ -20,12 +20,6 @@ spring:
         order_updates: true
 
 app:
-  dev:
-    demo-patient-password: ${QAMQORMED_DEMO_PATIENT_PASSWORD:}
-    demo-doctor-password: ${QAMQORMED_DEMO_DOCTOR_PASSWORD:}
-    demo-nurse-password: ${QAMQORMED_DEMO_NURSE_PASSWORD:}
-    demo-admin-password: ${QAMQORMED_DEMO_ADMIN_PASSWORD:}
-    demo-staff-password: ${QAMQORMED_DEMO_STAFF_PASSWORD:}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
   ai:

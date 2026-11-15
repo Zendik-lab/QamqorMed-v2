@@ -13,12 +13,6 @@ spring:
       mode: never
 
 app:
-  dev:
-    demo-patient-password: test-patient-password
-    demo-doctor-password: test-doctor-password
-    demo-nurse-password: test-nurse-password
-    demo-admin-password: test-admin-password
-    demo-staff-password: test-staff-password
   cors:
     allowed-origins: http://localhost:5173
   ai:

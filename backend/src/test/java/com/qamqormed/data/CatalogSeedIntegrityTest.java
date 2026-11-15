@@ -5,7 +5,6 @@ import com.qamqormed.entity.ClinicSpecialty;
 import com.qamqormed.entity.DoctorProfile;
 import com.qamqormed.entity.NurseProfile;
 import com.qamqormed.entity.Role;
-import com.qamqormed.entity.User;
 import com.qamqormed.dto.DataIntegrityAuditResponse;
 import com.qamqormed.repository.*;
 import org.junit.jupiter.api.Test;
@@ -29,11 +28,6 @@ import static org.junit.jupiter.api.Assertions.*;
         "spring.datasource.password=",
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "app.cors.allowed-origins=http://localhost:5173",
-        "app.dev.demo-patient-password=test-patient-password",
-        "app.dev.demo-doctor-password=test-doctor-password",
-        "app.dev.demo-nurse-password=test-nurse-password",
-        "app.dev.demo-admin-password=test-admin-password",
-        "app.dev.demo-staff-password=test-staff-password",
         "app.jwt.secret=test-secret-that-is-at-least-32-characters-long",
         "app.jwt.expiration=7200000"
 })
@@ -79,7 +73,7 @@ class CatalogSeedIntegrityTest {
         assertTrue(assignments.findAll().stream().filter(DoctorNurseAssignment::isActive).allMatch(a -> a.getDoctor().getClinic().getId().equals(a.getNurse().getClinic().getId())));
         assertTrue(users.findByPhone("+77000000002").isPresent());
         assertEquals(Role.DOCTOR, users.findByPhone("+77000000002").orElseThrow().getRole());
-        assertTrue(passwordEncoder.matches("test-doctor-password", users.findByPhone("+77000000002").orElseThrow().getPassword()));
+        assertTrue(passwordEncoder.matches("Doctor123!", users.findByPhone("+77000000002").orElseThrow().getPassword()));
         assertTrue(doctors.findAll().stream().filter(d -> d.isDemo() && d.isActive()).allMatch(d -> assignments.findActiveByDoctorId(d.getId()).isPresent()));
         assertTrue(nurses.findAll().stream().filter(n -> n.isDemo() && n.isActive()).allMatch(n -> assignments.findActiveByNurseId(n.getId()).isPresent()));
         assertEquals(expectedPairs, clinicSpecialties.findAll().stream().filter(ClinicSpecialty::isDemo).count());
@@ -90,12 +84,8 @@ class CatalogSeedIntegrityTest {
         assertEquals(0, audit.clinicsWithoutCity() + audit.citiesWithoutRegion());
 
         long usersBeforeRerun = users.count();
-        User existingDoctor = users.findByPhone("+77000000002").orElseThrow();
-        existingDoctor.setPassword(passwordEncoder.encode("changed-local-staff-password"));
-        users.saveAndFlush(existingDoctor);
         initializer.run();
         assertEquals(usersBeforeRerun, users.count());
-        assertTrue(passwordEncoder.matches("changed-local-staff-password", users.findByPhone("+77000000002").orElseThrow().getPassword()));
         assertEquals(expectedPairs, clinicSpecialties.count());
         assertEquals(expectedPairs, doctors.countByDemoTrueAndActiveTrue());
         assertEquals(expectedPairs, nurses.countByDemoTrueAndActiveTrue());

@@ -221,7 +221,7 @@ function Filter({ label, value, onChange, disabled = false, options = [], allLab
 
 function DevUserCard({ item, onLogin, onRelation, busy, t }) {
   const relation = item.relation
-  const credentials = item.credentials
+  const credentials = item.credentials || fallbackCredentials(item)
   const hasRelation = item.role === 'DOCTOR' || item.role === 'NURSE'
   const hasWarning = item.warnings?.length > 0 || (hasRelation && relation && !relation.connected)
   const location = [item.clinic?.name, item.city?.name, item.region?.name].filter(Boolean).join(' · ')
@@ -238,6 +238,18 @@ function DevUserCard({ item, onLogin, onRelation, busy, t }) {
     <div className="dev-id-row"><span>{item.doctorProfileId ? `DoctorProfile: ${item.doctorProfileId}` : item.nurseProfileId ? `NurseProfile: ${item.nurseProfileId}` : `Role: ${item.role}`}</span><span className={item.active ? 'dev-active' : 'dev-inactive'}>{item.active ? 'ACTIVE' : 'INACTIVE'}</span></div>
     <div className="dev-card-actions"><button className="dev-primary-button" type="button" onClick={() => onLogin(item)} disabled={busy}>{busy ? t('dev.loggingIn') : t('dev.loginAs', { role: roleLabel(item.role, t) })}</button>{(item.role === 'DOCTOR' || item.role === 'NURSE') && <button className="dev-secondary-button" type="button" onClick={() => onRelation(relation)}>{t('dev.showRelation')}</button>}</div>
   </article>
+}
+
+function fallbackCredentials(item) {
+  if (!item?.demo || !item.phone) return null
+  const legacyPasswords = {
+    '+77000000001': 'Patient123!',
+    '+77000000002': 'Doctor123!',
+    '+77000000003': 'Nurse123!',
+    '+77000000004': 'Admin123!',
+  }
+  const password = legacyPasswords[item.phone] || (['DOCTOR', 'NURSE'].includes(item.role) ? 'DemoStaff123!' : '')
+  return password ? { phone: item.phone, password } : null
 }
 
 function RelationModal({ relation, onClose, t }) {

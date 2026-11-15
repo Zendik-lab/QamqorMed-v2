@@ -85,7 +85,7 @@ Frontend: `frontend/.env.example` содержит `VITE_API_URL=http://localhos
 Локальная база (пример):
 
 ```sql
-CREATE USER qamqormed WITH PASSWORD '<choose-a-local-database-password>';
+CREATE USER qamqormed WITH PASSWORD 'change_me_only_for_local_development';
 CREATE DATABASE qamqormed OWNER qamqormed;
 ```
 
@@ -96,17 +96,8 @@ $env:DB_URL = "jdbc:postgresql://localhost:5432/qamqormed"
 $env:DB_USERNAME = "qamqormed"
 $env:DB_PASSWORD = "your-local-password"
 $env:CORS_ALLOWED_ORIGINS = "http://localhost:5173"
-$jwtSecretBytes = New-Object byte[] 48
-$rng = [Security.Cryptography.RandomNumberGenerator]::Create()
-$rng.GetBytes($jwtSecretBytes)
-$env:JWT_SECRET = [Convert]::ToBase64String($jwtSecretBytes)
-$rng.Dispose()
+$env:JWT_SECRET = "local-development-secret-change-me-32-chars"
 $env:JWT_EXPIRATION = "7200000"
-$env:QAMQORMED_DEMO_PATIENT_PASSWORD = Read-Host "Local demo patient password"
-$env:QAMQORMED_DEMO_DOCTOR_PASSWORD = Read-Host "Local demo doctor password"
-$env:QAMQORMED_DEMO_NURSE_PASSWORD = Read-Host "Local demo nurse password"
-$env:QAMQORMED_DEMO_ADMIN_PASSWORD = Read-Host "Local demo admin password"
-$env:QAMQORMED_DEMO_STAFF_PASSWORD = Read-Host "Generated local demo staff password"
 
 cd backend
 mvn spring-boot:run
@@ -117,8 +108,6 @@ mvn spring-boot:run
 ```powershell
 mvn spring-boot:run -Dspring-boot.run.profiles=prod
 ```
-
-Разбор production-входа сотрудников и безопасная проверка данных Render: [docs/render-staff-auth.md](docs/render-staff-auth.md).
 
 Frontend:
 
@@ -141,19 +130,14 @@ npm run build
 
 ## Development demo users
 
-`DevDataInitializer` и Dev API активны только с профилем `dev`. Фиксированные DEMO-учётки и сгенерированные DEMO-сотрудники не создаются в `prod`; на Render нужно отдельно завести реальные учётные записи сотрудников. Пароли DEMO задаются через переменные окружения и не хранятся в исходном коде. Инициализатор не меняет пароль существующей учётной записи при повторном запуске.
-
-Для локального `dev` задайте пять отдельных значений в неотслеживаемом `.env` или в текущем PowerShell-сеансе. Для уже заполненной локальной базы укажите текущие пароли DEMO-учёток, иначе Dev Panel покажет новые значения, а существующие хеши останутся прежними. Пример команд есть в разделе запуска backend выше.
-
-Локальные DEMO-телефоны:
+`DevDataInitializer` имеет `@Profile("dev")`, проверяет `existsByPhone` и создаёт пользователей только один раз. В `prod` demo users автоматически не создаются. Все данные ниже вымышленные и предназначены ONLY FOR LOCAL DEVELOPMENT.
 
 | Роль | Телефон | Пароль |
 |---|---|---|
-| PATIENT | `+77000000001` | `QAMQORMED_DEMO_PATIENT_PASSWORD` |
-| DOCTOR | `+77000000002` | `QAMQORMED_DEMO_DOCTOR_PASSWORD` |
-| NURSE | `+77000000003` | `QAMQORMED_DEMO_NURSE_PASSWORD` |
-| ADMIN | `+77000000004` | `QAMQORMED_DEMO_ADMIN_PASSWORD` |
-| Сгенерированный DEMO-персонал | телефон из Dev Panel | `QAMQORMED_DEMO_STAFF_PASSWORD` |
+| PATIENT | `+77000000001` | `Patient123!` |
+| DOCTOR | `+77000000002` | `Doctor123!` |
+| NURSE | `+77000000003` | `Nurse123!` |
+| ADMIN | `+77000000004` | `Admin123!` |
 
 На `/login` в development доступна компактная ссылка на `/dev`. Старого quick-login блока на странице входа нет: поиск пользователей, просмотр данных для входа и вход под DEMO выполняются в DEV Panel. Обхода Spring Security и отдельного `/api/demo-login` нет.
 
@@ -252,15 +236,14 @@ $nurse = Invoke-RestMethod -Method Get -Uri "http://localhost:8080/api/doctors/$
 Регистрация пациента:
 
 ```powershell
-$testPassword = Read-Host "Temporary local test password"
-$body = @{ firstName="Demo"; lastName="Patient"; phone="+77001234567"; password=$testPassword; confirmPassword=$testPassword } | ConvertTo-Json
+$body = @{ firstName="Demo"; lastName="Patient"; phone="+77001234567"; password="Password123!"; confirmPassword="Password123!" } | ConvertTo-Json
 Invoke-RestMethod -Method Post -Uri http://localhost:8080/api/auth/register -ContentType "application/json" -Body $body
 ```
 
 Login:
 
 ```powershell
-$body = @{ phone="+77000000001"; password=$env:QAMQORMED_DEMO_PATIENT_PASSWORD } | ConvertTo-Json
+$body = @{ phone="+77000000001"; password="Patient123!" } | ConvertTo-Json
 $login = Invoke-RestMethod -Method Post -Uri http://localhost:8080/api/auth/login -ContentType "application/json" -Body $body
 $token = $login.accessToken
 ```
@@ -295,9 +278,9 @@ Authorization: Bearer <token>
 Content-Type: application/json
 
 {
-  "currentPassword": "<current-password-from-your-local-environment>",
-  "newPassword": "<new-password>",
-  "confirmNewPassword": "<new-password>"
+  "currentPassword": "Patient123!",
+  "newPassword": "NewPassword123!",
+  "confirmNewPassword": "NewPassword123!"
 }
 ```
 
@@ -446,7 +429,7 @@ GET/POST/DELETE /api/admin/doctor-nurse-pairs[/{doctorId}]
 
 Frontend добавляет patient-разделы `/patient/diagnoses`, `/patient/prescriptions`, `/patient/medications`, выбор «я/подопечный», отображение структурированных медицинских данных и обновлённые workflow-статусы. Все patient/doctor/nurse/admin endpoint'ы защищены `SecurityConfig`; JWT role нельзя изменить через frontend. ИИН в DTO маскируется, пароли и password hash не возвращаются.
 
-В dev автоматически создаются `PatientProfile` для старых demo-пользователей и небольшой ICD-10 каталог. Пароли для DEMO-учёток задаются переменными `QAMQORMED_DEMO_*` и не применяются в production.
+В dev автоматически создаются `PatientProfile` для старых demo-пользователей и небольшой ICD-10 каталог. Demo-доступ остаётся прежним: `+77000000001 / Patient123!`, `+77000000002 / Doctor123!`, `+77000000003 / Nurse123!`, `+77000000004 / Admin123!`.
 
 ## Этап 8: локальный QamqorMed AI
 

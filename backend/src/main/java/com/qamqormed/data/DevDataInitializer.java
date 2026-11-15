@@ -8,7 +8,6 @@ import com.qamqormed.service.StaffProfileService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -32,6 +31,7 @@ import java.util.stream.Collectors;
 @Profile("dev")
 public class DevDataInitializer implements CommandLineRunner {
     private static final Logger log = LoggerFactory.getLogger(DevDataInitializer.class);
+    private static final String DEMO_PASSWORD = "DemoStaff123!";
     private static final String DEMO_BIO = "DEMO-профиль QamqorMed. Не является сотрудником указанной медицинской организации.";
     private static final String[] FIRST_NAMES = {"Ayan", "Aigerim", "Alikhan", "Aruzhan", "Daniyar", "Dana", "Dias", "Dinara", "Erasyl", "Fariza", "Madi", "Madina", "Nursultan", "Nazym", "Rauan", "Sabina", "Sanzhar", "Saule", "Timur", "Tomiris", "Yerlan", "Zhanar", "Zhandos", "Zhibek"};
     private static final String[] LAST_NAMES = {"Sarsenov", "Tulegenova", "Beketov", "Ospanova", "Kassymov", "Nurpeisova", "Akhmetov", "Serikova", "Zhaksybekov", "Muratova", "Kairatov", "Amanzhanova", "Saparov", "Mukanova", "Kenzhebekov", "Aubakirova", "Yessenov", "Kaliyeva", "Baimukhanov", "Tursynova", "Rakhimov", "Bekmuratova", "Zholdasov", "Iskakova", "Abdullin", "Bekturova", "Kozhabekov", "Orazbayeva", "Seisenov", "Kumarova", "Nurgaliyev", "Aitova"};
@@ -51,11 +51,6 @@ public class DevDataInitializer implements CommandLineRunner {
     private final AppointmentRepository appointments;
     private final StaffProfileService staff;
     private final JdbcTemplate jdbcTemplate;
-    private final String demoPatientPassword;
-    private final String demoDoctorPassword;
-    private final String demoNursePassword;
-    private final String demoAdminPassword;
-    private final String demoStaffPassword;
     private String demoPasswordHash;
 
     public DevDataInitializer(UserRepository users, PasswordEncoder passwordEncoder, RegionRepository regions,
@@ -63,12 +58,7 @@ public class DevDataInitializer implements CommandLineRunner {
                               ClinicSpecialtyRepository clinicSpecialties, DoctorProfileRepository doctors,
                               NurseProfileRepository nurses, DoctorNurseAssignmentRepository assignments,
                               AppointmentRepository appointments, StaffProfileService staff,
-                              JdbcTemplate jdbcTemplate,
-                              @Value("${app.dev.demo-patient-password:}") String demoPatientPassword,
-                              @Value("${app.dev.demo-doctor-password:}") String demoDoctorPassword,
-                              @Value("${app.dev.demo-nurse-password:}") String demoNursePassword,
-                              @Value("${app.dev.demo-admin-password:}") String demoAdminPassword,
-                              @Value("${app.dev.demo-staff-password:}") String demoStaffPassword) {
+                              JdbcTemplate jdbcTemplate) {
         this.users = users;
         this.passwordEncoder = passwordEncoder;
         this.regions = regions;
@@ -82,26 +72,16 @@ public class DevDataInitializer implements CommandLineRunner {
         this.appointments = appointments;
         this.staff = staff;
         this.jdbcTemplate = jdbcTemplate;
-        this.demoPatientPassword = demoPatientPassword;
-        this.demoDoctorPassword = demoDoctorPassword;
-        this.demoNursePassword = demoNursePassword;
-        this.demoAdminPassword = demoAdminPassword;
-        this.demoStaffPassword = demoStaffPassword;
     }
 
     @Override
     @Transactional
     public void run(String... args) throws Exception {
-        requireDemoPassword("QAMQORMED_DEMO_PATIENT_PASSWORD", demoPatientPassword);
-        requireDemoPassword("QAMQORMED_DEMO_DOCTOR_PASSWORD", demoDoctorPassword);
-        requireDemoPassword("QAMQORMED_DEMO_NURSE_PASSWORD", demoNursePassword);
-        requireDemoPassword("QAMQORMED_DEMO_ADMIN_PASSWORD", demoAdminPassword);
-        requireDemoPassword("QAMQORMED_DEMO_STAFF_PASSWORD", demoStaffPassword);
-        demoPasswordHash = passwordEncoder.encode(demoStaffPassword);
-        createUserIfMissing("Demo", "Patient", "+77000000001", demoPatientPassword, Role.PATIENT);
-        createUserIfMissing("Demo", "Doctor", "+77000000002", demoDoctorPassword, Role.DOCTOR);
-        createUserIfMissing("Demo", "Nurse", "+77000000003", demoNursePassword, Role.NURSE);
-        createUserIfMissing("Demo", "Admin", "+77000000004", demoAdminPassword, Role.ADMIN);
+        demoPasswordHash = passwordEncoder.encode(DEMO_PASSWORD);
+        createUserIfMissing("Demo", "Patient", "+77000000001", "Patient123!", Role.PATIENT);
+        createUserIfMissing("Demo", "Doctor", "+77000000002", "Doctor123!", Role.DOCTOR);
+        createUserIfMissing("Demo", "Nurse", "+77000000003", "Nurse123!", Role.NURSE);
+        createUserIfMissing("Demo", "Admin", "+77000000004", "Admin123!", Role.ADMIN);
 
         Map<String, Region> regionByCode = importRegions();
         Map<String, City> cityByCode = importCities(regionByCode);
@@ -524,12 +504,6 @@ public class DevDataInitializer implements CommandLineRunner {
                     clinic.setSource("DEMO");
                     clinics.save(clinic);
                 }));
-    }
-
-    private void requireDemoPassword(String variableName, String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalStateException(variableName + " must be set when the dev profile is active");
-        }
     }
 
     private User createUserIfMissing(String firstName, String lastName, String phone, String rawPassword, Role role) {
